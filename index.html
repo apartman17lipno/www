@@ -300,7 +300,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
 <footer id="kontakt">
   <div class="wrap">
     <div><strong style="font-family:var(--serif);font-size:1.15rem;color:var(--ink)">Costa Plana</strong><br>Moderní apartmán pár kroků od Lipna.<br>Černá v Pošumaví, jižní Čechy.</div>
-    <div>Kontakt<br><a href="mailto:apartmanycvp@gmail.com">apartmanycvp@gmail.com</a><br><a href="#rezervace">Poptat termín</a></div>
+    <div>Kontakt<br><a href="mailto:apartman17lipno@gmail.com">apartman17lipno@gmail.com</a><br><a href="#rezervace">Poptat termín</a></div>
     <div>© 2026 Apartmán Costa Plana<br>Fotografie: costaplanalipno.cz</div>
   </div>
 </footer>
@@ -380,7 +380,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
   function renderTariff(){
     if(!PRICES){
       document.getElementById('tariff').innerHTML='';
-      document.getElementById('tariffnote').textContent=priceFailed?'Ceník se nepodařilo načíst. Aktuální ceny vám rádi sdělíme e-mailem na apartmanycvp@gmail.com.':'Načítám ceník…';
+      document.getElementById('tariffnote').textContent=priceFailed?'Ceník se nepodařilo načíst. Aktuální ceny vám rádi sdělíme e-mailem na apartman17lipno@gmail.com.':'Načítám ceník…';
       return;
     }
     var h='';PRICES.rules.forEach(function(r){h+='<div><dt>'+esc(r.label)+'</dt><dd>'+kc(r.price)+'</dd></div>';});
@@ -432,7 +432,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
       box.style.cssText='margin-top:20px;padding:18px 20px;border:1px solid var(--line);border-radius:10px;background:var(--bg)';
       form.insertAdjacentElement('afterend',box);
     }
-    var mailLink='<a href="mailto:apartmanycvp@gmail.com">apartmanycvp@gmail.com</a>';
+    var mailLink='<a href="mailto:apartman17lipno@gmail.com">apartman17lipno@gmail.com</a>';
     if(!selFrom||!selTo){box.textContent='Vyberte prosím v kalendáři příjezd a odjezd.';return;}
     var data={email:document.getElementById('f-mail').value,from:selFrom,to:selTo,
       guests:document.getElementById('f-guests').value,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:''};
