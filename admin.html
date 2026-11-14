@@ -97,7 +97,7 @@ function nights(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:
 function noun(n){return n+' '+(n===1?'noc':n<5?'noci':'nocí');}
 var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Ceník se nepodařilo uložit. Zkontrolujte pole, data zadejte například ve tvaru 21.12.',notfound:'Událost už neexistuje, seznam se obnoví.'};
 function toast(t,bad){var m=$('msg');m.textContent=t;m.className='toast '+(bad?'bad':'ok');m.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){m.hidden=true;},6000);}
-var EP='https://script.google.com/macros/s/AKfycbzJcwv_rKfYrthWBPTxr7xply3I58UES-6FyxkdT3FYk3LvLUXXCvuQBtm-ef9c4Qjs/exec',KEY='cp_admin_session',CLIENT_ID='';
+var EP='https://script.google.com/macros/s/AKfycbzJcwv_rKfYrthWBPTxr7xply3I58UES-6FyxkdT3FYk3LvLUXXCvuQBtm-ef9c4Qjs/exec',KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
 // Veřejné GET volání přes <script> (jen config a nonce, bez tajných údajů)
 function jsonp(params){
   return new Promise(function(resolve,reject){
@@ -146,7 +146,7 @@ var LOGIN_ERR={forbidden:'Tento Google účet nemá přístup do administrace.',
 function startLogin(){
   if(!window.google||!google.accounts||getSess())return;
   jsonp({action:'config'}).then(function(c){
-    CLIENT_ID=c&&c.clientId||'';
+    CLIENT_ID=c&&c.clientId||CLIENT_ID;
     if(!CLIENT_ID||CLIENT_ID.indexOf('DOPLNTE')===0){info(LOGIN_ERR.config);return;}
     return jsonp({action:'nonce'}).then(function(n){
       if(!n||!n.ok){info(LOGIN_ERR[n&&n.error]||LOGIN_ERR.server);return;}
