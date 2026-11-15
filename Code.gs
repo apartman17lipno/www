@@ -300,10 +300,16 @@ function nightPrice(md, prices) {
   return price;
 }
 
+// Výpočet používá kalendářní dny v UTC, aby časová pásma skriptu a kalendáře neposouvala noc.
 function calcStay(from, to, adults) {
-  var prices = getPrices(), tz = getCal().getTimeZone(), sum = 0, nights = 0;
-  for (var d = new Date(from); d < to; d.setDate(d.getDate() + 1)) {
-    sum += nightPrice(Utilities.formatDate(d, tz, 'MM-dd'), prices); nights++;
+  var prices = getPrices(), sum = 0, nights = 0;
+  var d = new Date(Date.UTC(from.getFullYear(), from.getMonth(), from.getDate()));
+  var end = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
+  while (d.getTime() < end) {
+    var md = ('0' + (d.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + d.getUTCDate()).slice(-2);
+    sum += nightPrice(md, prices);
+    nights++;
+    d.setUTCDate(d.getUTCDate() + 1);
   }
   var localFee = prices.perPersonNight * adults * nights;
   return { nights: nights, accommodation: sum, cleaning: prices.cleaning, localFee: localFee,
