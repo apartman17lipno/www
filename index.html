@@ -472,10 +472,11 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     .then(function(j){
       if(!j||!j.ok){throw new Error(j&&j.error||'x');}
       box.textContent='Děkujeme, poptávku jsme přijali a termín předběžně zablokovali. Potvrdíme ho vám e-mailem.';
-      form.reset();reset();adjustOccupancy('init');return loadBusy();
+      form.reset();document.getElementById('f-adults').value='2';document.getElementById('f-children').value='0';reset();adjustOccupancy('init');return loadBusy();
     }).catch(function(err){
       var c=err&&err.message;
       if(c==='busy'){box.textContent='Tento termín je bohužel už obsazený. Vyberte prosím jiný.';reset();return loadBusy();}
+      if(c==='people'){box.textContent='Počet dospělých a dětí nesmí překročit kapacitu 4 osob.';return;}
       box.innerHTML=(c==='dates')?'Zkontrolujte prosím data pobytu.':'Odeslání se nepodařilo. Napište nám prosím na '+mailLink+'.';
     }).then(function(){btn.disabled=false;btn.textContent='Odeslat poptávku';});
   });
