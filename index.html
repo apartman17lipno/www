@@ -283,11 +283,17 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
       <form id="inq">
         <label class="full">Váš e-mail<input type="email" id="f-mail" required autocomplete="email"></label>
         <div class="full"><div id="cal" class="cal" aria-label="Výběr termínu pobytu"></div><div id="pricebox" class="pricebox" aria-live="polite"></div><input type="hidden" id="f-from"><input type="hidden" id="f-to"></div>
-        <label class="full">Počet hostů
-          <select id="f-guests">
-            <option>1 host</option><option selected>2 hosté</option><option>3 hosté</option><option>4 hosté</option>
+        <label>Počet dospělých
+          <select id="f-adults">
+            <option value="1">1 dospělá osoba</option><option value="2" selected>2 dospělé osoby</option><option value="3">3 dospělé osoby</option><option value="4">4 dospělé osoby</option>
           </select>
         </label>
+        <label>Počet dětí
+          <select id="f-children">
+            <option value="0" selected>0 dětí</option><option value="1">1 dítě</option><option value="2">2 děti</option><option value="3">3 děti</option>
+          </select>
+        </label>
+        <p class="full note">Kapacita je nejvýše 4 osoby celkem. Lze ubytovat maximálně 4 dospělé nebo 3 děti. Místní poplatek se počítá pouze za dospělé.</p>
         <fieldset class="full opts"><legend>Pro děti</legend><label class="chk"><input type="checkbox" id="f-cot"> Dětská postýlka</label><label class="chk"><input type="checkbox" id="f-chair"> Dětská židlička</label></fieldset>
         <label class="full">Zpráva<textarea id="f-msg"></textarea></label>
         <div class="full"><button class="btn" type="submit">Odeslat poptávku</button></div>
@@ -386,20 +392,43 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     var h='';PRICES.rules.forEach(function(r){h+='<div><dt>'+esc(r.label)+'</dt><dd>'+kc(r.price)+'</dd></div>';});
     if(!coversYear())h+='<div><dt>Ostatní období</dt><dd>'+kc(PRICES.defaultPrice)+'</dd></div>';
     document.getElementById('tariff').innerHTML=h;
-    document.getElementById('tariffnote').innerHTML='K ceně se připočítává jednorázový úklid <strong>'+kc(PRICES.cleaning)+'</strong> a poplatek <strong>'+kc(PRICES.perPersonNight)+' za osobu a noc</strong>. Cena za pobyt se spočítá při výběru termínu.';
+    document.getElementById('tariffnote').innerHTML='K ceně se připočítává jednorázový úklid <strong>'+kc(PRICES.cleaning)+'</strong> a místní poplatek <strong>'+kc(PRICES.perPersonNight)+' za dospělou osobu a noc</strong>. Děti jsou od místního poplatku osvobozeny.';
+  }
+  function adjustOccupancy(changed){
+    var adultsEl=document.getElementById('f-adults'), childrenEl=document.getElementById('f-children');
+    var adults=parseInt(adultsEl.value,10)||2, children=parseInt(childrenEl.value,10)||0;
+    if(changed==='adults') children=Math.min(children,4-adults);
+    if(changed==='children') adults=Math.max(1,Math.min(adults,4-children));
+    adults=Math.max(1,Math.min(4,adults));
+    children=Math.max(0,Math.min(3,4-adults,children));
+    function fill(select,max,value,label){
+      select.textContent='';
+      for(var n=0;n<=max;n++){
+        if(select===adultsEl&&n===0) continue;
+        var option=document.createElement('option');option.value=String(n);option.textContent=label(n);
+        option.selected=n===value;select.appendChild(option);
+      }
+    }
+    fill(adultsEl,4-children,adults,function(n){return n+(n===1?' dospělá osoba':' dospělé osoby');});
+    fill(childrenEl,Math.min(3,4-adults),children,function(n){return n+(n===1?' dítě':' děti');});
+    updatePrice();
   }
   function updatePrice(){
     var box=document.getElementById('pricebox'); lastPrice='';
     if(!PRICES||!selFrom||!selTo){box.innerHTML='';return;}
     var groups={},order=[],n=0,sum=0,d;
     for(d=selFrom;d<selTo;d=addDays(d,1)){var pr=nightPrice(d);if(!groups[pr]){groups[pr]=0;order.push(pr);}groups[pr]++;n++;sum+=pr;}
-    var guests=parseInt(document.getElementById('f-guests').value,10)||1;
-    var fee=PRICES.perPersonNight*guests*n, total=sum+PRICES.cleaning+fee;
+    var adults=parseInt(document.getElementById('f-adults').value,10)||1;
+    var children=parseInt(document.getElementById('f-children').value,10)||0;
+    var fee=PRICES.perPersonNight*adults*n, total=sum+PRICES.cleaning+fee;
+    var people=adults+' '+(adults===1?'dospělá osoba':'dospělé osoby')+', '+children+' '+(children===1?'dítě':'děti');
     var h='';
     order.forEach(function(pr){h+='<div class="r"><span>'+groups[pr]+' × '+kc(pr)+'</span><b>'+kc(groups[pr]*pr)+'</b></div>';});
     h+='<div class="r"><span>Úklid</span><b>'+kc(PRICES.cleaning)+'</b></div>';
-    h+='<div class="r"><span>Poplatek '+kc(PRICES.perPersonNight)+' × '+guests+' '+(guests===1?'osoba':(guests<5?'osoby':'osob'))+' × '+n+' '+(n===1?'noc':(n<5?'noci':'nocí'))+'</span><b>'+kc(fee)+'</b></div>';
-    h+='<div class="r tot"><span>Cena za pobyt</span><b>'+kc(total)+'</b></div><small>Orientační cena. Konečnou potvrdíme v nabídce.</small>';
+    h+='<div class="r"><span>Hosté</span><b>'+people+'</b></div>';
+    h+='<div class="r"><span>Místní poplatek '+kc(PRICES.perPersonNight)+' × '+adults+' dospělých × '+n+' '+(n===1?'noc':(n<5?'noci':'nocí'))+'</span><b>'+kc(fee)+'</b></div>';
+    h+='<div class="r"><span>Místní poplatek za děti</span><b>0 Kč</b></div>';
+    h+='<div class="r tot"><span>Cena za pobyt</span><b>'+kc(total)+'</b></div><small>Orientační nabídka. Děti jsou od místního poplatku osvobozeny; konečnou cenu potvrdíme e-mailem.</small>';
     box.innerHTML=h; lastPrice=kc(total);
   }
   function sync(){fromEl.value=selFrom;toEl.value=selTo;updatePrice();}
@@ -434,21 +463,25 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     }
     var mailLink='<a href="mailto:apartman17lipno@gmail.com">apartman17lipno@gmail.com</a>';
     if(!selFrom||!selTo){box.textContent='Vyberte prosím v kalendáři příjezd a odjezd.';return;}
+    var adults=parseInt(document.getElementById('f-adults').value,10)||1;
+    var children=parseInt(document.getElementById('f-children').value,10)||0;
     var data={email:document.getElementById('f-mail').value,from:selFrom,to:selTo,
-      guests:document.getElementById('f-guests').value,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:''};
+      adults:adults,children:children,guests:adults+children,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:''};
     btn.disabled=true;btn.textContent='Odesílám…';box.textContent='';
     jsonp({action:'submit',data:JSON.stringify(data)})
     .then(function(j){
       if(!j||!j.ok){throw new Error(j&&j.error||'x');}
       box.textContent='Děkujeme, poptávku jsme přijali a termín předběžně zablokovali. Potvrdíme ho vám e-mailem.';
-      form.reset();reset();return loadBusy();
+      form.reset();reset();adjustOccupancy('init');return loadBusy();
     }).catch(function(err){
       var c=err&&err.message;
       if(c==='busy'){box.textContent='Tento termín je bohužel už obsazený. Vyberte prosím jiný.';reset();return loadBusy();}
       box.innerHTML=(c==='dates')?'Zkontrolujte prosím data pobytu.':'Odeslání se nepodařilo. Napište nám prosím na '+mailLink+'.';
     }).then(function(){btn.disabled=false;btn.textContent='Odeslat poptávku';});
   });
-  document.getElementById('f-guests').addEventListener('change',updatePrice);
+  document.getElementById('f-adults').addEventListener('change',function(){adjustOccupancy('adults');});
+  document.getElementById('f-children').addEventListener('change',function(){adjustOccupancy('children');});
+  adjustOccupancy('init');
   renderTariff();
   jsonp({action:'prices'}).then(function(j){
     if(j&&j.ok&&j.prices&&Array.isArray(j.prices.rules)){PRICES=j.prices;}
