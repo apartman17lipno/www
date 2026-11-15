@@ -80,7 +80,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
     <div class="row">
       <label>Cena v dnech mimo uvedená období (Kč)<input type="number" min="0" id="p-def"></label>
       <label>Úklid za pobyt (Kč)<input type="number" min="0" id="p-clean"></label>
-      <label>Poplatek za osobu a noc (Kč)<input type="number" min="0" id="p-pp"></label>
+      <label>Místní poplatek za dospělou osobu a noc (Kč)<input type="number" min="0" id="p-pp"></label>
     </div>
     <div class="acts"><button class="b" id="savePrices">Uložit ceník</button></div>
     <p class="muted small">Nové ceny se na webu zobrazí po obnovení stránky. Rezervace už vytvořené zůstávají s původní cenou.</p>
@@ -179,7 +179,7 @@ function card(e){
   c.appendChild(top);
   if(e.type!=='inquiry')c.appendChild(el('div','line',e.title));
   if(e.email)c.appendChild(el('div','line','E-mail: '+e.email));
-  var bits=[];if(e.guests)bits.push(e.guests);if(e.kids&&e.kids!=='nic')bits.push('děti: '+e.kids);if(e.price)bits.push('cena '+e.price);
+  var bits=[];if(e.adults)bits.push('dospělí: '+e.adults);if(e.children!=null&&e.children!=='')bits.push('děti: '+e.children);if(e.guests&&!e.adults)bits.push(e.guests);if(e.kids&&e.kids!=='nic')bits.push('výbava pro děti: '+e.kids);if(e.localFee)bits.push('místní poplatek: '+e.localFee);if(e.price)bits.push('celkem: '+e.price);
   if(bits.length)c.appendChild(el('div','line muted',bits.join(' · ')));
   if(e.message)c.appendChild(el('div','msg',e.message));
   var a=el('div','acts');
