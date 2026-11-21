@@ -286,6 +286,14 @@ function handleSubmit(d) {
   } finally { lock.releaseLock(); }
 }
 // ================= Obsazenost =================
+function isBlockingEvent_(ev) {
+  var title = String(ev.getTitle() || '');
+  // A cancelled/rejected calendar event may predate its metadata; its explicit title still wins.
+  if (/^(?:Zrušená|Zamítnutá)\s*:/i.test(title)) return false;
+  var meta = readReservationMeta_(ev);
+  return !(meta && (meta.status === 'Zamítnutá' || meta.status === 'Zrušená'));
+}
+
 function busyNights() {
   var cal = getCal();
   var tz = cal.getTimeZone();
@@ -293,8 +301,7 @@ function busyNights() {
   var end = new Date(start.getTime()); end.setDate(end.getDate() + DAYS_AHEAD);
   var map = {};
   cal.getEvents(start, end).forEach(function (ev) {
-    var meta = readReservationMeta_(ev);
-    if (meta && (meta.status === 'Zamítnutá' || meta.status === 'Zrušená')) return;
+    if (!isBlockingEvent_(ev)) return;
     var s = ev.getStartTime(), f = ev.getEndTime();
     var day = new Date(s.getFullYear(), s.getMonth(), s.getDate());
     var last = ev.isAllDayEvent() ? new Date(f.getTime() - 1) : new Date(f.getTime() - 60000);
@@ -307,11 +314,10 @@ function busyNights() {
 }
 
 function anyBusy(from, to) {
-  var tz = getCal().getTimeZone(), busy = busyNights();
-  for (var t = new Date(from); t < to; t.setDate(t.getDate() + 1)) {
-    if (busy[Utilities.formatDate(t, tz, 'yyyy-MM-dd')]) return true;
-  }
-  return false;
+  // Check exact overlapping events so the availability view and submission use the same rule.
+  return getCal().getEvents(from, to).some(function (ev) {
+    return isBlockingEvent_(ev);
+  });
 }
 
 // ================= Ceny =================
