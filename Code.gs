@@ -220,6 +220,27 @@ function getCal() {
   return cal;
 }
 
+// Variabilní symbol je 10místné číselné číslo rezervace (YYMMDD + denní pořadí).
+// Volá se z operací, které již drží ScriptLock.
+function nextReservationNumber_() {
+  var props = PropertiesService.getScriptProperties();
+  var day = Utilities.formatDate(new Date(), getCal().getTimeZone(), 'yyMMdd');
+  var savedDay = props.getProperty('reservation_number_day') || '';
+  var sequence = savedDay === day ? (parseInt(props.getProperty('reservation_number_sequence') || '0', 10) || 0) : 0;
+  sequence++;
+  if (sequence > 9999) throw new Error('Denní limit čísel rezervací byl překročen.');
+  props.setProperty('reservation_number_day', day);
+  props.setProperty('reservation_number_sequence', String(sequence));
+  return day + ('0000' + sequence).slice(-4);
+}
+function ensureReservationNumber_(ev, meta) {
+  if (!/^\\d{10}$/.test(String(meta.reservationNumber || ''))) {
+    meta.reservationNumber = nextReservationNumber_();
+    saveReservationMeta_(ev, meta);
+  }
+  return meta.reservationNumber;
+}
+
 // ================= Poptávka z webu (veřejné) =================
 function handleSubmit(d) {
   var lock = LockService.getScriptLock();
@@ -250,13 +271,13 @@ function handleSubmit(d) {
       '\n\nZpráva:\n' + message;
     var ev = getCal().createAllDayEvent('Poptávka: ' + email, from, to, { description: description });
     ev.setColor(CalendarApp.EventColor.YELLOW);
-    var meta = { version: 1, status: 'Ke schválení', email: email, adults: adults, children: children,
+    var meta = { version: 1, reservationNumber: nextReservationNumber_(), status: 'Ke schválení', email: email, adults: adults, children: children,
       guests: guests, extras: extrasText, pricing: pricing, payments: [], notifications: {},
       createdAt: new Date().toISOString(), approvedAt: null, history: [], checkin: { completedAt: null, guestData: null } };
     addHistory_(meta, 'Vytvoření rezervace', 'host', { status: meta.status });
     saveReservationMeta_(ev, meta);
     MailApp.sendEmail({ to: NOTIFY.join(','), replyTo: email, subject: 'Nová rezervace ke schválení – Costa Plana',
-      body: 'Nová rezervace čeká na schválení.\n\nPříjezd: ' + czDate(d.from) + '\nOdjezd: ' + czDate(d.to) +
+      body: 'Nová rezervace čeká na schválení.\n\nČíslo rezervace / variabilní symbol: ' + meta.reservationNumber + '\nPříjezd: ' + czDate(d.from) + '\nOdjezd: ' + czDate(d.to) +
         '\nHosté: ' + guests + '\nPro děti: ' + extrasText + '\nCena za ubytování: ' + money(stay.accommodation) +
         '\nÚklid: ' + money(stay.cleaning) + '\nMístní poplatek: ' + money(stay.localFee) +
         '\nCena celkem: ' + money(stay.total) + '\nE-mail hosta: ' + email + '\n\nZpráva:\n' + message +
@@ -353,7 +374,7 @@ function eventInfo(ev) {
              t.indexOf('Blokace') === 0 ? 'block' : 'other';
   var paid = meta ? totalPaid_(meta) : 0;
   return {
-    id: ev.getId(), type: type, title: t,
+    id: ev.getId(), type: type, title: t, reservationNumber: meta ? (meta.reservationNumber || '') : '',
     from: Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd'),
     to: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd'),
     email: meta ? meta.email : get('E-mail'), guests: meta ? meta.guests : get('Hosté'),
@@ -404,17 +425,24 @@ function findInquiry_(id) {
 
 // ================= Administrátorské funkce (dosažitelné jen přes adminCall_) =================
 function adminList_() {
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
   var cal = getCal();
   var start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - DAYS_AHEAD);
   var end = new Date(start.getTime()); end.setDate(end.getDate() + DAYS_AHEAD * 2);
   var todayKey = Utilities.formatDate(new Date(), cal.getTimeZone(), 'yyyy-MM-dd');
-  var list = cal.getEvents(start, end).map(eventInfo).sort(function (a, b) {
+  var list = cal.getEvents(start, end).map(function (ev) {
+    var meta = readReservationMeta_(ev);
+    if (meta && !meta.reservationNumber) ensureReservationNumber_(ev, meta);
+    return eventInfo(ev);
+  }).sort(function (a, b) {
     var af = a.from >= todayKey, bf = b.from >= todayKey;
     if (af !== bf) return af ? -1 : 1;
     return af ? (a.from < b.from ? -1 : a.from > b.from ? 1 : 0) : (a.from > b.from ? -1 : a.from < b.from ? 1 : 0);
   });
   var settings = lifecycleSettings_();
   return { ok: true, events: list, prices: getPrices(), settings: settings };
+  } finally { lock.releaseLock(); }
 }
 
 function adminConfirm_(id, sendMail) { return adminApprove_(id, OWNER); }
@@ -425,6 +453,7 @@ function adminApprove_(id, actor) {
     var ev = getCal().getEventById(String(id || '')), meta = ev && readReservationMeta_(ev);
     if (!ev || !meta || meta.status !== 'Ke schválení') return { ok: false, error: 'notfound' };
     if (!meta.pricing || !meta.pricing.total || !meta.pricing.accommodationAmount) return { ok: false, error: 'legacy' };
+    ensureReservationNumber_(ev, meta);
     var settings = lifecycleSettings_();
     if (!settings.bankAccount) return { ok: false, error: 'settings' };
     meta.approvedAt = new Date().toISOString(); meta.status = 'Čeká na zálohu';
@@ -455,6 +484,7 @@ function adminMigrateLegacy_(id, accommodation, cleaning, localFee, actor) {
     var a = validMoney_(accommodation), c = validMoney_(cleaning), f = validMoney_(localFee);
     if (a === null || c === null || f === null || a <= 0) return { ok: false, error: 'invalid' };
     var meta = legacyMeta_(ev);
+    meta.reservationNumber = nextReservationNumber_();
     meta.pricing = { accommodationAmount: a, cleaning: c, localFee: f, total: a + c + f,
       deposit: Math.round(a * .5), nights: nightsBetween_(eventInfo(ev).from, eventInfo(ev).to) };
     meta.needsPriceReview = false;
@@ -630,6 +660,7 @@ function processReservationLifecycle() {
     var end = new Date(today.getTime()); end.setDate(end.getDate() + DAYS_AHEAD + 2);
     cal.getEvents(today, end).forEach(function (ev) {
       var meta = readReservationMeta_(ev);
+      if (meta && !meta.reservationNumber) ensureReservationNumber_(ev, meta);
       if (!meta || !meta.approvedAt || meta.status === 'Zamítnutá' || meta.status === 'Zrušená' ||
           meta.status === 'Online check-in dokončen') return;
       var arrival = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
@@ -658,14 +689,14 @@ function lifecycleEmailBody_(ev, meta, stage) {
       '\nCelková cena rezervace: ' + money(meta.pricing.total) +
       '\n\nPlatbu prosím zašlete na účet: ' + settings.bankAccount +
       (settings.accountName ? ' (' + settings.accountName + ')' : '') +
-      '\nDo zprávy pro příjemce uveďte e-mail: ' + meta.email +
+      '\nVariabilní symbol: ' + meta.reservationNumber +
       '\n\nS pozdravem\nApartmán Costa Plana' };
   if (stage === 'balance') return { subject: 'Doplatek rezervace – Costa Plana',
     body: greeting + 'blíží se váš pobyt v apartmánu Costa Plana. Prosíme o doplacení zbývající částky.\n\nPříjezd: ' +
       czDate(from) + '\nOdjezd: ' + czDate(to) + '\nCena celkem: ' + money(meta.pricing.total) +
       '\nDosud uhrazeno: ' + money(paid) + '\nZbývá uhradit: ' + money(remaining) +
       '\n\nÚčet: ' + settings.bankAccount + (settings.accountName ? ' (' + settings.accountName + ')' : '') +
-      '\nDo zprávy pro příjemce uveďte e-mail: ' + meta.email + '\n\nS pozdravem\nApartmán Costa Plana' };
+      '\nVariabilní symbol: ' + meta.reservationNumber + '\n\nS pozdravem\nApartmán Costa Plana' };
   if (stage === 'code') return { subject: 'Přístupový kód k apartmánu Costa Plana', body: greeting + 'váš online check-in je dokončen. Přístupový kód: ' + settings.accessCode + '\n\nS pozdravem\nApartmán Costa Plana' };
   if (stage === 'checkin') return { subject: 'Online check-in před pobytem – Costa Plana',
     body: greeting + 'vaše rezervace je plně uhrazena. Vyplňte prosím online check-in před příjezdem:\n\n' +
