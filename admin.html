@@ -223,6 +223,11 @@ function card(e){
     twoStep(delRejected,'Opravdu smazat?',function(){call('adminDelete',[e.id],'Zamítnutá rezervace smazána.',true);});
     acts.appendChild(delRejected);
   }
+  if(e.lifecycle&&e.status==='Zrušená'){
+    var delCancelled=el('button','b d','Smazat zrušenou rezervaci');
+    twoStep(delCancelled,'Opravdu trvale smazat zrušenou rezervaci?',function(){call('adminDelete',[e.id],'Zrušená rezervace smazána.',true);});
+    acts.appendChild(delCancelled);
+  }
   if(e.lifecycle&&e.approvedAt&&['Zamítnutá','Zrušená'].indexOf(e.status)<0){
     var paybox=el('div','panel');paybox.appendChild(el('h2','','Platby'));
     (e.payments||[]).forEach(function(p){paybox.appendChild(el('div','line','Přijato '+money(p.amount)+' · '+new Date(p.receivedAt).toLocaleString('cs-CZ')+' · '+(p.by||'')));});
@@ -231,10 +236,10 @@ function card(e){
       var pb=el('button','b','Zaznamenat platbu');pb.type='button';pb.onclick=function(){call('adminRecordPayment',[e.id,pi.value],'Platba zaznamenána.',true);};payrow.appendChild(pb);paybox.appendChild(payrow);
     }
     if(e.checkin&&e.checkin.guestData){
-      paybox.appendChild(el('h2','','Online check-in – '+new Date(e.checkin.completedAt).toLocaleString('cs-CZ')));
-      e.checkin.guestData.forEach(function(g,i){paybox.appendChild(el('div','line', (i+1)+'. '+g.firstName+' '+g.lastName+' · '+g.birthDate+' · '+g.address+' · '+g.citizenship+' · '+g.documentType+' '+g.documentNumber+' · poplatek '+money(g.feeAmount)+(g.feeExemption?' · '+g.feeExemption:'')));});
+      paybox.appendChild(el('h2','','Online check-in dokončen – '+new Date(e.checkin.completedAt).toLocaleString('cs-CZ')));
+      e.checkin.guestData.forEach(function(g,i){paybox.appendChild(el('div','line', (i+1)+'. '+g.firstName+' '+g.lastName+' · '+g.birthDate+' · '+g.address+' · '+g.citizenship+(g.documentType||g.documentNumber?' · doklad '+[g.documentType,g.documentNumber].filter(Boolean).join(' '):' · doklad neuveden')+' · poplatek '+money(g.feeAmount)+(g.feeExemption?' · '+g.feeExemption:'')));});
     }
-    var notices=e.notifications||{}, names={deposit:'Záloha',balance:'Doplatek',checkin:'Online check-in',code:'Přístupový kód'};
+    var notices=e.notifications||{}, names={deposit:'Záloha',balance:'Doplatek',checkin:'Výzva k online check-inu',code:'Přístupový kód'};
     Object.keys(names).forEach(function(k){var n=notices[k];if(n)paybox.appendChild(el('div','line muted small',names[k]+': '+(n.sentAt?'odesláno '+new Date(n.sentAt).toLocaleString('cs-CZ'):n.state==='error'?'chyba při odesílání':'odesílání zahájeno')));});
     if(e.history&&e.history.length){var hist=el('details');var sum=el('summary','', 'Historie změn ('+e.history.length+')');hist.appendChild(sum);e.history.slice().reverse().forEach(function(h){hist.appendChild(el('div','line muted small',historyLine(h)));});paybox.appendChild(hist);}
     c.appendChild(paybox);
