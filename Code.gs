@@ -702,8 +702,10 @@ function lifecycleEmailBody_(ev, meta, stage) {
       (settings.accountName ? ' (' + settings.accountName + ')' : '') +
       '\nVariabilní symbol: ' + meta.reservationNumber +
       '\n\nS pozdravem\nApartmán Costa Plana' };
-  if (stage === 'balance') return { subject: 'Doplatek rezervace – Costa Plana',
-    body: greeting + 'blíží se váš pobyt v apartmánu Costa Plana. Prosíme o doplacení zbývající částky.\n\nPříjezd: ' +
+  if (stage === 'balance') return { subject: (paid > 0 ? 'Doplatek rezervace – Costa Plana' : 'Platba rezervace – Costa Plana'),
+    body: greeting + (paid > 0
+      ? 'Blíží se váš pobyt v apartmánu Costa Plana. Prosíme o doplacení zbývající částky.'
+      : 'Vzhledem k blížícímu se termínu pobytu prosíme o úhradu celé ceny rezervace.') + '\n\nPříjezd: ' +
       czDate(from) + '\nOdjezd: ' + czDate(to) + '\nCena celkem: ' + money(meta.pricing.total) +
       '\nDosud uhrazeno: ' + money(paid) + '\nZbývá uhradit: ' + money(remaining) +
       '\n\nÚčet: ' + settings.bankAccount + (settings.accountName ? ' (' + settings.accountName + ')' : '') +
