@@ -18,7 +18,7 @@ header{display:flex;justify-content:space-between;align-items:center;gap:12px;fl
 .t-inquiry{border-left-color:#e0b43a}.t-booked{border-left-color:#3d9a62}.t-block{border-left-color:#8a9a96}.t-other{border-left-color:var(--line)}
 .top{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;margin-bottom:6px}
 .badge{font-size:.75rem;font-weight:600;padding:2px 9px;border-radius:999px;background:var(--line)}
-.t-inquiry .badge{background:#f5e3a8;color:#4a3a05}.t-booked .badge{background:#c9ead6;color:#10432a}
+.t-inquiry .badge{background:#f5e3a8;color:#4a3a05}.t-booked .badge{background:#c9ead6;color:#10432a}.t-lifecycle .badge{background:#d8e9ed;color:#12323b}
 .muted{color:var(--muted)}.small{font-size:.9rem}
 .line{font-size:.95rem}.msg{white-space:pre-wrap;color:var(--muted);font-size:.92rem;margin-top:4px}
 .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
@@ -52,8 +52,18 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
 
 <section id="t1">
   <div class="panel">
-    <label class="chk"><input type="checkbox" id="mailGuest" checked> Při potvrzení nebo zamítnutí poslat hostovi e-mail</label>
+    <label class="chk"><input type="checkbox" id="mailGuest" checked> Při zamítnutí poslat hostovi e-mail</label>
     <div id="list" style="margin-top:14px"><p class="muted">Načítám…</p></div>
+  </div>
+  <div class="panel">
+    <h2>Platební údaje a přístupový kód</h2>
+    <p class="muted small">Údaje se ukládají do nastavení Apps Scriptu. QR platba zatím není zapnutá.</p>
+    <div class="row">
+      <label>Jméno příjemce<input id="l-account-name" maxlength="100"></label>
+      <label>Bankovní účet / IBAN<input id="l-bank-account" maxlength="100" autocomplete="off"></label>
+      <label>Přístupový kód k apartmánu<input id="l-access-code" maxlength="100" autocomplete="off"></label>
+    </div>
+    <div class="acts"><button class="b" id="saveLifecycleSettings">Uložit nastavení</button></div>
   </div>
   <div class="panel">
     <h2>Přidat rezervaci nebo blokaci</h2>
@@ -95,7 +105,7 @@ function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null
 function cz(i){var a=i.split('-');return (+a[2])+'. '+(+a[1])+'. '+a[0];}
 function nights(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);}
 function noun(n){return n+' '+(n===1?'noc':n<5?'noci':'nocí');}
-var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Ceník se nepodařilo uložit. Zkontrolujte pole, data zadejte například ve tvaru 21.12.',notfound:'Událost už neexistuje, seznam se obnoví.'};
+var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v nastavení níže.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
 function toast(t,bad){var m=$('msg');m.textContent=t;m.className='toast '+(bad?'bad':'ok');m.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){m.hidden=true;},6000);}
 var EP='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec',KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
 // Veřejné GET volání přes <script> (jen config a nonce, bez tajných údajů)
@@ -171,35 +181,78 @@ function twoStep(btn,label,fn){
     btn.disabled=true;fn();
   };
 }
+function money(n){return Math.round(Number(n)||0).toLocaleString('cs-CZ')+' Kč';}
+function historyLine(h){var d=new Date(h.at),x=h.details||{},parts=[d.toLocaleString('cs-CZ'),h.action];if(x.status)parts.push('stav: '+x.status);if(x.amount!=null)parts.push('částka: '+money(x.amount));if(x.oldTotal!=null)parts.push('cena: '+money(x.oldTotal)+' → '+money(x.newTotal));if(h.by)parts.push('provedl: '+h.by);return parts.join(' · ');}
 function card(e){
   var c=el('div','card t-'+e.type),top=el('div','top');
-  top.appendChild(el('span','badge',{inquiry:'Poptávka',booked:'Rezervace',block:'Blokace',other:'Jiná událost'}[e.type]));
+  var label=e.lifecycle?(e.status||'Rezervace'):({inquiry:'Poptávka',booked:'Rezervace',block:'Blokace',other:'Jiná událost'}[e.type]);
+  top.appendChild(el('span','badge',label));
   top.appendChild(el('strong','',cz(e.from)+' – '+cz(e.to)));
   top.appendChild(el('span','muted small',noun(Math.max(1,nights(e.from,e.to)))));
   c.appendChild(top);
   if(e.type!=='inquiry')c.appendChild(el('div','line',e.title));
   if(e.email)c.appendChild(el('div','line','E-mail: '+e.email));
-  var bits=[];if(e.adults)bits.push('dospělí: '+e.adults);if(e.children!=null&&e.children!=='')bits.push('děti: '+e.children);if(e.guests&&!e.adults)bits.push(e.guests);if(e.kids&&e.kids!=='nic')bits.push('výbava pro děti: '+e.kids);if(e.localFee)bits.push('místní poplatek: '+e.localFee);if(e.price)bits.push('celkem: '+e.price);
+  var bits=[];if(e.adults)bits.push('dospělí: '+e.adults);if(e.children!=null&&e.children!=='')bits.push('děti: '+e.children);if(e.guests&&!e.adults)bits.push(e.guests);if(e.kids&&e.kids!=='nic')bits.push('výbava pro děti: '+e.kids);
+  if(e.pricing){bits.push('ubytování: '+money(e.pricing.accommodationAmount));bits.push('úklid: '+money(e.pricing.cleaning));bits.push('místní poplatek: '+money(e.pricing.localFee));bits.push('celkem: '+money(e.pricing.total));bits.push('uhrazeno: '+money(e.totalPaid));bits.push('zbývá: '+money(e.remaining));}
+  else{if(e.localFee)bits.push('místní poplatek: '+e.localFee);if(e.price)bits.push('celkem: '+e.price);}
   if(bits.length)c.appendChild(el('div','line muted',bits.join(' · ')));
   if(e.message)c.appendChild(el('div','msg',e.message));
-  var a=el('div','acts');
-  if(e.type==='inquiry'){
-    var ok=el('button','b','Potvrdit');twoStep(ok,'Opravdu potvrdit?',function(){call('adminConfirm',[e.id,$('mailGuest').checked],'Rezervace potvrzena.',true);});
-    var no=el('button','b d','Zamítnout');twoStep(no,'Opravdu zamítnout?',function(){call('adminReject',[e.id,$('mailGuest').checked],'Poptávka zamítnuta.',true);});
-    a.appendChild(ok);a.appendChild(no);
+  var acts=el('div','acts');
+  if(e.type==='inquiry'&&!e.lifecycle){
+    var migrate=el('div','panel');
+    migrate.appendChild(el('p','small','Starší poptávka nemá uloženou cenu za ubytování zvlášť. Před schválením doplňte částky z původní nabídky.'));
+    var row=el('div','row'),inputs=[];
+    [['Cena ubytování','accommodation'],['Úklid','cleaning'],['Místní poplatek','fee']].forEach(function(x){var lab=el('label','',x[0]);var inp=el('input');inp.type='number';inp.min='0';inp.step='1';lab.appendChild(inp);row.appendChild(lab);inputs.push(inp);});
+    migrate.appendChild(row);
+    var mb=el('button','b o','Uložit rozpis starší rezervace');mb.type='button';mb.onclick=function(){call('adminMigrateLegacy',[e.id,inputs[0].value,inputs[1].value,inputs[2].value],'Cenový rozpis doplněn.',true);};
+    migrate.appendChild(mb);c.appendChild(migrate);
+    var no=el('button','b d','Zamítnout');twoStep(no,'Opravdu zamítnout?',function(){call('adminReject',[e.id,$('mailGuest').checked],'Poptávka zamítnuta.',true);});acts.appendChild(no);
   }
-  if(e.type==='booked'||e.type==='block'){
-    var del=el('button','b d','Smazat');twoStep(del,'Opravdu smazat?',function(){call('adminDelete',[e.id],'Smazáno.',true);});a.appendChild(del);
+  if(e.lifecycle&&e.status==='Ke schválení'){
+    var ok=el('button','b','Schválit a poslat výzvu k záloze');twoStep(ok,'Opravdu schválit?',function(){call('adminApprove',[e.id],'Rezervace schválena, výzva k záloze odeslána.',true);});
+    var no2=el('button','b d','Zamítnout');twoStep(no2,'Opravdu zamítnout?',function(){call('adminReject',[e.id,$('mailGuest').checked],'Rezervace zamítnuta.',true);});
+    acts.appendChild(ok);acts.appendChild(no2);
   }
-  if(a.childNodes.length)c.appendChild(a);
+  if(e.lifecycle&&e.approvedAt&&['Zamítnutá','Zrušená'].indexOf(e.status)<0){
+    var paybox=el('div','panel');paybox.appendChild(el('h2','','Platby'));
+    (e.payments||[]).forEach(function(p){paybox.appendChild(el('div','line','Přijato '+money(p.amount)+' · '+new Date(p.receivedAt).toLocaleString('cs-CZ')+' · '+(p.by||'')));});
+    if(e.status!=='Online check-in dokončen'&&e.remaining>0){
+      var payrow=el('div','row'),pl=el('label','', 'Zaznamenat přijatou platbu (Kč)'),pi=el('input');pi.type='number';pi.min='1';pi.max=String(e.remaining);pi.step='1';pl.appendChild(pi);payrow.appendChild(pl);
+      var pb=el('button','b','Zaznamenat platbu');pb.type='button';pb.onclick=function(){call('adminRecordPayment',[e.id,pi.value],'Platba zaznamenána.',true);};payrow.appendChild(pb);paybox.appendChild(payrow);
+    }
+    if(e.checkin&&e.checkin.guestData){
+      paybox.appendChild(el('h2','','Online check-in – '+new Date(e.checkin.completedAt).toLocaleString('cs-CZ')));
+      e.checkin.guestData.forEach(function(g,i){paybox.appendChild(el('div','line', (i+1)+'. '+g.firstName+' '+g.lastName+' · '+g.birthDate+' · '+g.address+' · '+g.citizenship+' · '+g.documentType+' '+g.documentNumber+' · poplatek '+money(g.feeAmount)+(g.feeExemption?' · '+g.feeExemption:'')));});
+    }
+    var notices=e.notifications||{}, names={deposit:'Záloha',balance:'Doplatek',checkin:'Online check-in',code:'Přístupový kód'};
+    Object.keys(names).forEach(function(k){var n=notices[k];if(n)paybox.appendChild(el('div','line muted small',names[k]+': '+(n.sentAt?'odesláno '+new Date(n.sentAt).toLocaleString('cs-CZ'):n.state==='error'?'chyba při odesílání':'odesílání zahájeno')));});
+    if(e.history&&e.history.length){var hist=el('details');var sum=el('summary','', 'Historie změn ('+e.history.length+')');hist.appendChild(sum);e.history.slice().reverse().forEach(function(h){hist.appendChild(el('div','line muted small',historyLine(h)));});paybox.appendChild(hist);}
+    c.appendChild(paybox);
+    if(!['Online check-in dokončen','Zamítnutá','Zrušená'].includes(e.status)){
+      var resend=el('div','acts');
+      var resendStages=[];if(e.totalPaid<Number(e.pricing.deposit||0))resendStages.push(['deposit','Znovu poslat zálohu']);if(e.remaining>0)resendStages.push(['balance','Znovu poslat doplatek']);if(e.status!=='Online check-in dokončen')resendStages.push(['checkin','Znovu poslat check-in']);resendStages.forEach(function(x){var b=el('button','b o',x[1]);b.type='button';b.onclick=function(){call('adminResendEmail',[e.id,x[0]],'E-mail znovu odeslán.',true);};resend.appendChild(b);});
+      c.appendChild(resend);
+      var dates=el('div','row'),lf=el('label','', 'Nový příjezd'),ifrom=el('input'),lt=el('label','', 'Nový odjezd'),ito=el('input');
+      ifrom.type='date';ifrom.value=e.from;ito.type='date';ito.value=e.to;lf.appendChild(ifrom);lt.appendChild(ito);dates.appendChild(lf);dates.appendChild(lt);
+      var rb=el('button','b o','Změnit termín');rb.type='button';rb.onclick=function(){call('adminReschedule',[e.id,ifrom.value,ito.value],'Termín změněn.',true);};dates.appendChild(rb);c.appendChild(dates);
+      var cancel=el('button','b d','Stornovat rezervaci');twoStep(cancel,'Opravdu stornovat?',function(){call('adminCancel',[e.id],'Rezervace stornována.',true);});c.appendChild(cancel);
+    }else if(e.checkin&&e.checkin.completedAt){
+      var cb=el('button','b o','Znovu poslat přístupový kód');cb.type='button';cb.onclick=function(){call('adminResendEmail',[e.id,'code'],'E-mail s kódem znovu odeslán.',true);};c.appendChild(cb);
+    }
+  }
+  if((e.type==='booked'||e.type==='block')&&!e.lifecycle){
+    var del=el('button','b d','Smazat');twoStep(del,'Opravdu smazat?',function(){call('adminDelete',[e.id],'Smazáno.',true);});acts.appendChild(del);
+  }
+  if(acts.childNodes.length)c.appendChild(acts);
   return c;
 }
 function render(withPrices){
   var box=$('list');box.textContent='';
   if(!data.events.length)box.appendChild(el('p','muted','Žádné nadcházející události.'));
   data.events.forEach(function(e){box.appendChild(card(e));});
-  var n=data.events.filter(function(e){return e.type==='inquiry';}).length;
+  var n=data.events.filter(function(e){return e.type==='inquiry'||(e.lifecycle&&e.status==='Ke schválení');}).length;
   $('cnt').textContent=n?'('+n+')':'';
+  if(data.settings){$('l-account-name').value=data.settings.accountName||'';$('l-bank-account').value=data.settings.bankAccount||'';$('l-access-code').value=data.settings.accessCode||'';}
   if(withPrices)renderPrices();
 }
 function mdToDm(md){var a=md.split('-');return (+a[1])+'.'+(+a[0])+'.';}
@@ -220,6 +273,7 @@ function renderPrices(){
   p.rules.forEach(function(r){rb.appendChild(ruleRow(r));});
   $('p-def').value=p.defaultPrice;$('p-clean').value=p.cleaning;$('p-pp').value=p.perPersonNight;
 }
+$('saveLifecycleSettings').onclick=function(){call('adminSaveLifecycleSettings',[{accountName:$('l-account-name').value,bankAccount:$('l-bank-account').value,accessCode:$('l-access-code').value}],'Nastavení uloženo.',true);};
 $('addRule').onclick=function(){$('rules').appendChild(ruleRow({}));};
 $('savePrices').onclick=function(){
   var rules=[],bad=false;

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Apartmán Costa Plana – Lipno, Černá v Pošumaví</title>
-<meta name="description" content="Moderní apartmán u Lipna v Černé v Pošumaví. Výhled na jezero, terasa, plně vybavená kuchyň a parkování. Poptat volný termín.">
+<meta name="description" content="Moderní apartmán u Lipna v Černé v Pošumaví. Výhled na jezero, terasa, plně vybavená kuchyň a parkování. Rezervovat pobyt.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
@@ -302,7 +302,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     </div>
     <div>
       <h3>Poptat volný termín</h3>
-      <p class="note">Jde o nezávaznou poptávku, nikoli potvrzenou rezervaci.</p>
+      <p class="note">Po odeslání žádost zkontrolujeme. Rezervace vzniká až po schválení a její stav vám pošleme e-mailem.</p>
       <form id="inq">
         <label class="full">Váš e-mail<input type="email" id="f-mail" required autocomplete="email"></label>
         <div class="full"><div id="cal" class="cal" aria-label="Výběr termínu pobytu"></div><div id="pricebox" class="pricebox" aria-live="polite"></div><input type="hidden" id="f-from"><input type="hidden" id="f-to"></div>
@@ -319,7 +319,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
         <p class="full note">Kapacita je nejvýše 4 osoby celkem. Lze ubytovat maximálně 4 dospělé nebo 3 děti. Místní poplatek se počítá pouze za dospělé.</p>
         <fieldset class="full opts"><legend>Pro děti</legend><label class="chk"><input type="checkbox" id="f-cot"> Dětská postýlka</label><label class="chk"><input type="checkbox" id="f-chair"> Dětská židlička</label></fieldset>
         <label class="full">Zpráva<textarea id="f-msg"></textarea></label>
-        <div class="full"><button class="btn" type="submit">Odeslat poptávku</button></div>
+        <div class="full"><button class="btn" type="submit">Odeslat rezervaci</button></div>
       </form>
     </div>
   </div>
@@ -491,10 +491,10 @@ footer .wrap{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap}
     var data={email:document.getElementById('f-mail').value,from:selFrom,to:selTo,
       adults:adults,children:children,guests:adults+children,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:''};
     btn.disabled=true;btn.textContent='Odesílám…';box.textContent='';
-    jsonp({action:'submit',data:JSON.stringify(data)})
+    fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'submit',data:data})}).then(function(r){return r.json();})
     .then(function(j){
       if(!j||!j.ok){throw new Error(j&&j.error||'x');}
-      box.textContent='Děkujeme, poptávku jsme přijali a termín předběžně zablokovali. Potvrdíme ho vám e-mailem.';
+      box.textContent='Děkujeme, žádost o rezervaci jsme přijali. Nyní čeká na schválení. O jejím stavu vás budeme informovat e-mailem.';
       form.reset();document.getElementById('f-adults').value='2';document.getElementById('f-children').value='0';reset();adjustOccupancy('init');return loadBusy();
     }).catch(function(err){
       var c=err&&err.message;

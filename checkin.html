@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Online check-in – Costa Plana</title>
+<style>
+:root{font:16px/1.5 system-ui,sans-serif;color:#12323b;background:#f3f6f4}
+*{box-sizing:border-box}body{margin:0;padding:24px}.wrap{max-width:720px;margin:0 auto}
+.card{background:#fff;border:1px solid #d3dedc;border-radius:14px;padding:24px;margin:24px 0}
+h1{font-size:1.5rem;margin:0 0 8px}h2{font-size:1.15rem;margin:0 0 16px}
+p{color:#4f6a70}.guest{padding:16px 0;border-top:1px solid #d3dedc}
+label{display:grid;gap:5px;margin:10px 0;font-size:.92rem}input,select{font:inherit;padding:10px;border:1px solid #b9c9c7;border-radius:8px}
+button{font:inherit;border:0;border-radius:999px;padding:12px 20px;background:#1f6f78;color:white;cursor:pointer}
+button:disabled{opacity:.6}#status{margin-top:16px}.error{color:#9b291e}.success{color:#146638}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}@media(max-width:600px){body{padding:12px}.card{padding:18px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="wrap"><section class="card">
+<h1>Online check-in</h1>
+<p>Vyplňte údaje všech ubytovaných osob. Údaje slouží k evidenci hostů a místního poplatku.</p>
+<form id="form"><div id="guests"></div><button id="send" type="submit">Dokončit check-in</button><p id="status" role="status"></p></form>
+</section></main>
+<script>
+var CHECKIN={id:'<?= reservationId ?>',token:'<?= token ?>',adults:<?= adults ?>,children:<?= children ?>};
+var box=document.getElementById('guests');
+var count=CHECKIN.adults+CHECKIN.children;
+for(var i=0;i<count;i++){
+ var category=i<CHECKIN.adults?'dospělý host':'dítě';
+ var section=document.createElement('section');section.className='guest';
+ var title=document.createElement('h2');title.textContent='Host '+(i+1)+' – '+category;section.appendChild(title);
+ var fields=[['firstName','Jméno','text'],['lastName','Příjmení','text'],['birthDate','Datum narození','date'],['address','Adresa trvalého pobytu nebo obdobná adresa v zahraničí','text'],['documentType','Druh dokladu totožnosti','select'],['documentNumber','Číslo dokladu','text'],['citizenship','Občanství','text']];
+ var grid=document.createElement('div');grid.className='grid';
+ fields.forEach(function(item){var label=document.createElement('label');label.textContent=item[1];var input;
+  if(item[2]==='select'){input=document.createElement('select');[['','Vyberte doklad'],['Občanský průkaz','Občanský průkaz'],['Cestovní pas','Cestovní pas'],['Pobytový průkaz','Pobytový průkaz'],['Jiný doklad','Jiný doklad']].forEach(function(o){var opt=document.createElement('option');opt.value=o[0];opt.textContent=o[1];input.appendChild(opt);});}
+  else{input=document.createElement('input');input.type=item[2];}
+  input.name=item[0];input.required=true;if(item[0]==='documentNumber')input.maxLength=80;if(item[0]==='address')input.maxLength=250;
+  label.appendChild(input);grid.appendChild(label);
+ });section.appendChild(grid);box.appendChild(section);
+}
+document.getElementById('form').addEventListener('submit',function(event){
+ event.preventDefault();var button=document.getElementById('send'),status=document.getElementById('status');
+ var entries=Array.prototype.map.call(box.querySelectorAll('.guest'),function(section){
+  var obj={};Array.prototype.forEach.call(section.querySelectorAll('input,select'),function(input){obj[input.name]=input.value;});return obj;
+ });
+ button.disabled=true;status.className='';status.textContent='Odesílám údaje…';
+ google.script.run.withSuccessHandler(function(result){
+  if(result&&result.ok){document.getElementById('form').hidden=true;status.className='success';status.textContent=result.warning?'Check-in je dokončen. E-mail s kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Check-in je dokončen. Potvrzení s přístupovým kódem vám přijde e-mailem.';}
+  else{button.disabled=false;status.className='error';status.textContent=result&&result.error==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';}
+ }).withFailureHandler(function(){button.disabled=false;status.className='error';status.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.'})
+ .submitOnlineCheckin(CHECKIN.id,CHECKIN.token,entries);
+});
+</script></body></html>
