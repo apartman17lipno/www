@@ -456,11 +456,14 @@ function adminApprove_(id, actor) {
     ensureReservationNumber_(ev, meta);
     var settings = lifecycleSettings_();
     if (!settings.bankAccount) return { ok: false, error: 'settings' };
-    meta.approvedAt = new Date().toISOString(); meta.status = 'Čeká na zálohu';
-    addHistory_(meta, 'Schválení rezervace', actor, { status: meta.status });
+    var tz = getCal().getTimeZone();
+    var arrival = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
+    var paymentStage = daysUntil_(arrival, tz) <= 14 ? 'balance' : 'deposit';
+    meta.approvedAt = new Date().toISOString(); meta.status = paymentStage === 'balance' ? 'Čeká na platbu' : 'Čeká na zálohu';
+    addHistory_(meta, 'Schválení rezervace', actor, { status: meta.status, firstPaymentRequest: paymentStage });
     ev.setTitle('Rezervace: ' + (meta.email || 'host')); ev.setColor(CalendarApp.EventColor.GREEN);
     saveReservationMeta_(ev, meta);
-    var sent = sendLifecycleEmail_(ev, meta, 'deposit', false, actor);
+    var sent = sendLifecycleEmail_(ev, meta, paymentStage, false, actor);
     if (!sent.ok) return sent;
     return { ok: true };
   } finally { lock.releaseLock(); }
@@ -522,12 +525,20 @@ function findInquiry_(id) {
 }
 
 function adminDelete_(id) {
-  var ev = getCal().getEventById(String(id || ''));
-  if (!ev) return { ok: false, error: 'notfound' };
-  if (readReservationMeta_(ev)) return { ok: false, error: 'managed' };
-  var t = ev.getTitle();
-  if (t.indexOf('Blokace') !== 0 && t.indexOf('Rezervace') !== 0 && t.indexOf('Poptávka') !== 0) return { ok: false, error: 'notfound' };
-  ev.deleteEvent(); return { ok: true };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ev = getCal().getEventById(String(id || ''));
+    if (!ev) return { ok: false, error: 'notfound' };
+    var meta = readReservationMeta_(ev);
+    // Managed reservations remain auditable; only rejected ones may be permanently removed.
+    if (meta) {
+      if (meta.status !== 'Zamítnutá') return { ok: false, error: 'managed' };
+      ev.deleteEvent(); return { ok: true };
+    }
+    var t = ev.getTitle();
+    if (t.indexOf('Blokace') !== 0 && t.indexOf('Rezervace') !== 0 && t.indexOf('Poptávka') !== 0) return { ok: false, error: 'notfound' };
+    ev.deleteEvent(); return { ok: true };
+  } finally { lock.releaseLock(); }
 }
 
 function adminCancel_(id, actor) {
@@ -711,6 +722,11 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
   if ((stage === 'deposit' || stage === 'balance') && !settings.bankAccount) return { ok: false, error: 'settings' };
   if (stage === 'balance' && Number(meta.pricing.total || 0) - totalPaid_(meta) <= 0) return { ok: false, error: 'state' };
   if (stage === 'deposit' && Number(meta.pricing.deposit || 0) - totalPaid_(meta) <= 0) return { ok: false, error: 'state' };
+  if (stage === 'deposit') {
+    var stayTz = getCal().getTimeZone();
+    var stayArrival = Utilities.formatDate(ev.getStartTime(), stayTz, 'yyyy-MM-dd');
+    if (daysUntil_(stayArrival, stayTz) <= 14) return { ok: false, error: 'state' };
+  }
   if (stage === 'checkin') {
     if (totalPaid_(meta) < Number(meta.pricing.total || 0) || meta.status === 'Online check-in dokončen')
       return { ok: false, error: 'state' };
@@ -764,6 +780,14 @@ function adminRecordPayment_(id, amount, actor) {
     meta.payments.push({ amount: n, receivedAt: new Date().toISOString(), by: actor });
     addHistory_(meta, 'Přijata platba', actor, { amount: n });
     refreshReservationStatus_(meta); saveReservationMeta_(ev, meta);
+    var tz = getCal().getTimeZone();
+    var arrival = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
+    var days = daysUntil_(arrival, tz);
+    if (totalPaid_(meta) >= Number(meta.pricing.total || 0) && days >= 0 && days <= 3 &&
+        !(meta.checkin && meta.checkin.completedAt) && !(meta.notifications && meta.notifications.checkin)) {
+      var checkinEmail = sendLifecycleEmail_(ev, meta, 'checkin', false, actor);
+      if (!checkinEmail.ok) return { ok: true, warning: 'checkinMail' };
+    }
     return { ok: true };
   } finally { lock.releaseLock(); }
 }
@@ -807,8 +831,12 @@ function checkinPage_(id, token) {
   if (!ev || !meta || meta.status !== 'Čeká na online check-in' || meta.checkin.completedAt ||
       !token || digestHex_(String(token)) !== meta.checkin.tokenHash || Number(meta.checkin.expiresAt) <= Date.now())
     return infoPage('Odkaz není platný', 'Odkaz mohl být již použit nebo jeho platnost vypršela. Kontaktujte nás prosím e-mailem.', 'mailto:' + OWNER, 'Napsat e-mail');
+  var adults = Number(meta.adults), children = Number(meta.children), guestCount = adults + children;
+  if (!isFinite(adults) || Math.floor(adults) !== adults || adults < 1 ||
+      !isFinite(children) || Math.floor(children) !== children || children < 0 || guestCount < 1 || guestCount > 4)
+    return infoPage('Chybné údaje rezervace', 'Počet hostů v rezervaci nelze ověřit. Kontaktujte nás prosím e-mailem.', 'mailto:' + OWNER, 'Napsat e-mail');
   var tpl = HtmlService.createTemplateFromFile('checkin');
-  tpl.reservationId = ev.getId(); tpl.token = String(token); tpl.adults = meta.adults; tpl.children = meta.children;
+  tpl.reservationId = ev.getId(); tpl.token = String(token); tpl.adults = adults; tpl.children = children; tpl.guestCount = guestCount;
   return tpl.evaluate().setTitle('Online check-in – Costa Plana');
 }
 
@@ -822,8 +850,10 @@ function completeCheckin_(id, token, guests) {
       return { ok: false, error: 'token' };
     var settings = lifecycleSettings_();
     if (!settings.accessCode) return { ok: false, error: 'settings' };
-    var expected = Number(meta.adults) + Number(meta.children);
-    if (!Array.isArray(guests) || guests.length !== expected) return { ok: false, error: 'guests' };
+    var adults = Number(meta.adults), children = Number(meta.children), expected = adults + children;
+    if (!isFinite(adults) || Math.floor(adults) !== adults || adults < 1 ||
+        !isFinite(children) || Math.floor(children) !== children || children < 0 || expected < 1 || expected > 4 ||
+        !Array.isArray(guests) || guests.length !== expected) return { ok: false, error: 'guests' };
     var clean = [];
     for (var i = 0; i < guests.length; i++) {
       var g = guests[i] || {};
