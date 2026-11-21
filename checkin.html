@@ -35,7 +35,7 @@ for(var i=0;i<count;i++){
  fields.forEach(function(item){var label=document.createElement('label');label.textContent=item[1];var input;
   if(item[2]==='select'){input=document.createElement('select');[['','Vyberte doklad'],['Občanský průkaz','Občanský průkaz'],['Cestovní pas','Cestovní pas'],['Pobytový průkaz','Pobytový průkaz'],['Jiný doklad','Jiný doklad']].forEach(function(o){var opt=document.createElement('option');opt.value=o[0];opt.textContent=o[1];input.appendChild(opt);});}
   else{input=document.createElement('input');input.type=item[2];}
-  input.name=item[0];input.required=true;if(item[0]==='documentNumber')input.maxLength=80;if(item[0]==='address')input.maxLength=250;
+  input.name=item[0];var optionalChildDocument=i>=CHECKIN.adults&&(item[0]==='documentType'||item[0]==='documentNumber');input.required=!optionalChildDocument;if(optionalChildDocument)label.appendChild(document.createTextNode(' (nepovinné)'));if(item[0]==='documentNumber')input.maxLength=80;if(item[0]==='address')input.maxLength=250;
   label.appendChild(input);
   if(item[0]==='address'&&i>0){
    var copy=document.createElement('button');copy.type='button';copy.className='copy-address';copy.textContent='Použít adresu hlavní osoby';
@@ -52,7 +52,7 @@ document.getElementById('form').addEventListener('submit',function(event){
  });
  button.disabled=true;status.className='';status.textContent='Odesílám údaje…';
  google.script.run.withSuccessHandler(function(result){
-  if(result&&result.ok){document.getElementById('form').hidden=true;status.className='success';status.textContent=result.warning?'Check-in je dokončen. E-mail s kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Check-in je dokončen. Potvrzení s přístupovým kódem vám přijde e-mailem.';}
+  if(result&&result.ok){document.getElementById('form').hidden=true;status.className='success';status.textContent=result.warning?'Online check-in byl dokončen. E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Online check-in byl dokončen. Potvrzení s přístupovým kódem vám přijde e-mailem.';}
   else{button.disabled=false;status.className='error';status.textContent=result&&result.error==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';}
  }).withFailureHandler(function(){button.disabled=false;status.className='error';status.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.'})
  .submitOnlineCheckin(CHECKIN.id,CHECKIN.token,entries);
