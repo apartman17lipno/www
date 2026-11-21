@@ -192,6 +192,7 @@ function card(e){
   c.appendChild(top);
   if(e.type!=='inquiry')c.appendChild(el('div','line',e.title));
   if(e.email)c.appendChild(el('div','line','E-mail: '+e.email));
+  if(e.reservationNumber)c.appendChild(el('div','line','Číslo rezervace / variabilní symbol: '+e.reservationNumber));
   var bits=[];if(e.adults)bits.push('dospělí: '+e.adults);if(e.children!=null&&e.children!=='')bits.push('děti: '+e.children);if(e.guests&&!e.adults)bits.push(e.guests);if(e.kids&&e.kids!=='nic')bits.push('výbava pro děti: '+e.kids);
   if(e.pricing){bits.push('ubytování: '+money(e.pricing.accommodationAmount));bits.push('úklid: '+money(e.pricing.cleaning));bits.push('místní poplatek: '+money(e.pricing.localFee));bits.push('celkem: '+money(e.pricing.total));bits.push('uhrazeno: '+money(e.totalPaid));bits.push('zbývá: '+money(e.remaining));}
   else{if(e.localFee)bits.push('místní poplatek: '+e.localFee);if(e.price)bits.push('celkem: '+e.price);}
