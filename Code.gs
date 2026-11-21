@@ -241,8 +241,9 @@ function handleSubmit(d) {
     if (d.cot === true) extras.push('dětská postýlka');
     if (d.chair === true) extras.push('dětská židlička');
     var extrasText = extras.length ? extras.join(', ') : 'nic', stay = calcStay(from, to, adults);
-    var pricing = { accommodation: stay.accommodation, cleaning: stay.cleaning, localFee: stay.localFee,
-      total: stay.total, deposit: Math.round(stay.accommodation * 0.5), nights: stay.nights };
+    var pricing = { accommodation: stay.accommodation, accommodationAmount: stay.accommodation,
+      cleaning: stay.cleaning, localFee: stay.localFee, total: stay.total,
+      deposit: Math.round(stay.accommodation * 0.5), nights: stay.nights };
     var description = 'E-mail: ' + email + '\nHosté: ' + guests + '\nDospělí: ' + adults + '\nPočet dětí: ' + children +
       '\nPro děti: ' + extrasText + '\nCena: ' + money(stay.total) + '\nUbytování: ' + money(stay.accommodation) +
       '\nÚklid: ' + money(stay.cleaning) + '\nMístní poplatek: ' + money(stay.localFee) +
@@ -546,7 +547,15 @@ function readReservationMeta_(ev) {
   if (i < 0) return null;
   try {
     var m = JSON.parse(d.substring(i + RESERVATION_META_MARKER.length));
-    return m && m.version === 1 && m.pricing ? m : null;
+    if (!m || m.version !== 1 || !m.pricing) return null;
+    // Compatibility: earlier lifecycle builds stored the lodging amount as `accommodation`.
+    if (m.pricing.accommodationAmount == null && m.pricing.accommodation != null)
+      m.pricing.accommodationAmount = Number(m.pricing.accommodation);
+    if (m.pricing.accommodation == null && m.pricing.accommodationAmount != null)
+      m.pricing.accommodation = Number(m.pricing.accommodationAmount);
+    if (m.pricing.deposit == null && Number(m.pricing.accommodationAmount) > 0)
+      m.pricing.deposit = Math.round(Number(m.pricing.accommodationAmount) * 0.5);
+    return m;
   } catch (e) { return null; }
 }
 function saveReservationMeta_(ev, meta) {
