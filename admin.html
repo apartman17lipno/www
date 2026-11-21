@@ -142,7 +142,11 @@ function load(keepPrices){
 function call(fn,args,ok,keepPrices){
   api(fn,args).then(function(res){
     if(res&&res.error==='auth')return authFail();
-    if(res&&res.ok){if(ok)toast(ok);load(keepPrices);}
+    if(res&&res.ok){
+      if(res.warning==='checkinMail')toast('Platba byla zaznamenána, ale okamžité odeslání check-in e-mailu selhalo. Odešlete výzvu ručně.',true);
+      else if(ok)toast(ok);
+      load(keepPrices);
+    }
     else{toast(ERR[res&&res.error]||'Akce se nepodařila.',true);if(res&&res.error==='notfound')load(keepPrices);}
   }).catch(function(){toast('Spojení se skriptem selhalo.',true);});
 }
@@ -210,9 +214,14 @@ function card(e){
     var no=el('button','b d','Zamítnout');twoStep(no,'Opravdu zamítnout?',function(){call('adminReject',[e.id,$('mailGuest').checked],'Poptávka zamítnuta.',true);});acts.appendChild(no);
   }
   if(e.lifecycle&&e.status==='Ke schválení'){
-    var ok=el('button','b','Schválit a poslat výzvu k záloze');twoStep(ok,'Opravdu schválit?',function(){call('adminApprove',[e.id],'Rezervace schválena, výzva k záloze odeslána.',true);});
+    var ok=el('button','b','Schválit a poslat výzvu k platbě');twoStep(ok,'Opravdu schválit?',function(){call('adminApprove',[e.id],'Rezervace schválena, platební výzva odeslána.',true);});
     var no2=el('button','b d','Zamítnout');twoStep(no2,'Opravdu zamítnout?',function(){call('adminReject',[e.id,$('mailGuest').checked],'Rezervace zamítnuta.',true);});
     acts.appendChild(ok);acts.appendChild(no2);
+  }
+  if(e.lifecycle&&e.status==='Zamítnutá'){
+    var delRejected=el('button','b d','Smazat zamítnutou rezervaci');
+    twoStep(delRejected,'Opravdu smazat?',function(){call('adminDelete',[e.id],'Zamítnutá rezervace smazána.',true);});
+    acts.appendChild(delRejected);
   }
   if(e.lifecycle&&e.approvedAt&&['Zamítnutá','Zrušená'].indexOf(e.status)<0){
     var paybox=el('div','panel');paybox.appendChild(el('h2','','Platby'));
@@ -231,7 +240,7 @@ function card(e){
     c.appendChild(paybox);
     if(!['Online check-in dokončen','Zamítnutá','Zrušená'].includes(e.status)){
       var resend=el('div','acts');
-      var resendStages=[];if(e.totalPaid<Number(e.pricing.deposit||0))resendStages.push(['deposit','Znovu poslat zálohu']);if(e.remaining>0)resendStages.push(['balance','Znovu poslat doplatek']);if(e.status!=='Online check-in dokončen')resendStages.push(['checkin','Znovu poslat check-in']);resendStages.forEach(function(x){var b=el('button','b o',x[1]);b.type='button';b.onclick=function(){call('adminResendEmail',[e.id,x[0]],'E-mail znovu odeslán.',true);};resend.appendChild(b);});
+      var resendStages=[];if(e.status==='Čeká na zálohu'&&e.totalPaid<Number(e.pricing.deposit||0))resendStages.push(['deposit','Znovu poslat výzvu k záloze']);if(e.remaining>0)resendStages.push(['balance','Znovu poslat výzvu k platbě']);if(e.status!=='Online check-in dokončen')resendStages.push(['checkin','Znovu poslat check-in']);resendStages.forEach(function(x){var b=el('button','b o',x[1]);b.type='button';b.onclick=function(){call('adminResendEmail',[e.id,x[0]],'E-mail znovu odeslán.',true);};resend.appendChild(b);});
       c.appendChild(resend);
       var dates=el('div','row'),lf=el('label','', 'Nový příjezd'),ifrom=el('input'),lt=el('label','', 'Nový odjezd'),ito=el('input');
       ifrom.type='date';ifrom.value=e.from;ito.type='date';ito.value=e.to;lf.appendChild(ifrom);lt.appendChild(ito);dates.appendChild(lf);dates.appendChild(lt);
