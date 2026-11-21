@@ -532,7 +532,7 @@ function adminDelete_(id) {
     var meta = readReservationMeta_(ev);
     // Managed reservations remain auditable; only rejected ones may be permanently removed.
     if (meta) {
-      if (meta.status !== 'Zamítnutá') return { ok: false, error: 'managed' };
+      if (['Zamítnutá', 'Zrušená'].indexOf(meta.status) < 0) return { ok: false, error: 'managed' };
       ev.deleteEvent(); return { ok: true };
     }
     var t = ev.getTitle();
@@ -697,6 +697,7 @@ function lifecycleEmailBody_(ev, meta, stage) {
     body: greeting + 'vaše rezervace apartmánu Costa Plana je schválena.\n\nPříjezd: ' + czDate(from) +
       '\nOdjezd: ' + czDate(to) + '\nCena ubytování: ' + money(meta.pricing.accommodationAmount) +
       '\nZáloha (50 % ceny ubytování): ' + money(meta.pricing.deposit) +
+      '\nK úhradě nyní: ' + money(Math.max(0, Number(meta.pricing.deposit || 0) - paid)) +
       '\nCelková cena rezervace: ' + money(meta.pricing.total) +
       '\n\nPlatbu prosím zašlete na účet: ' + settings.bankAccount +
       (settings.accountName ? ' (' + settings.accountName + ')' : '') +
@@ -717,6 +718,27 @@ function lifecycleEmailBody_(ev, meta, stage) {
       '\n\nPo dokončení vám zašleme přístupový kód k apartmánu.\n\nS pozdravem\nApartmán Costa Plana' };
   return null;
 }
+function createPaymentQr_(account, amount, variableSymbol) {
+  try {
+    var raw = String(account || '').replace(/\s+/g, '').toUpperCase();
+    var prefix = '', number = '', bank = '';
+    if (/^CZ\d{22}$/.test(raw)) {
+      bank = raw.substring(4, 8); prefix = String(Number(raw.substring(8, 14))); number = String(Number(raw.substring(14, 24)));
+    } else {
+      var m = raw.match(/^(?:(\d+)-)?(\d+)\/(\d{4})$/);
+      if (!m) return null;
+      prefix = m[1] || ''; number = m[2]; bank = m[3];
+    }
+    if (prefix === '0') prefix = '';
+    if (number === '0' || !number || !bank || !isFinite(amount) || Number(amount) <= 0) return null;
+    var params = { accountPrefix: prefix, accountNumber: number, bankCode: bank, amount: Number(amount).toFixed(2), currency: 'CZK', vs: String(variableSymbol || '').replace(/\D/g, '').slice(0, 10), message: 'Rezervace ' + String(variableSymbol || ''), size: '220' };
+    var query = Object.keys(params).map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
+    var response = UrlFetchApp.fetch('https://api.paylibo.com/paylibo/generator/czech/image?' + query, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200 || !/^image\/png/i.test(response.getHeaders()['Content-Type'] || '')) return null;
+    return response.getBlob().setName('qr-platba.png');
+  } catch (err) { return null; }
+}
+
 function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
   var settings = lifecycleSettings_();
   if (!meta.email) return { ok: false, error: 'email' };
@@ -755,7 +777,13 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
   try {
     var mail = lifecycleEmailBody_(ev, meta, stage);
     if (!mail) return { ok: false, error: 'stage' };
-    MailApp.sendEmail({ to: meta.email, replyTo: OWNER, name: 'Apartmán Costa Plana', subject: mail.subject, body: mail.body });
+    var qr = (stage === 'deposit' || stage === 'balance') ? createPaymentQr_(settings.bankAccount, stage === 'deposit' ? Math.max(0, Number(meta.pricing.deposit || 0) - totalPaid_(meta)) : Math.max(0, Number(meta.pricing.total || 0) - totalPaid_(meta)), meta.reservationNumber) : null;
+    var emailOptions = { to: meta.email, replyTo: OWNER, name: 'Apartmán Costa Plana', subject: mail.subject, body: mail.body };
+    if (qr) {
+      emailOptions.htmlBody = '<div style="font-family:Arial,sans-serif;white-space:pre-line">' + esc(mail.body) + '<br><br><strong>QR platba</strong><br><img src="cid:paymentQr" alt="QR kód pro platbu" width="220" height="220"></div>';
+      emailOptions.inlineImages = { paymentQr: qr };
+    }
+    MailApp.sendEmail(emailOptions);
     var sentAt = new Date().toISOString();
     if (!manual) { notice[stage].state = 'sent'; notice[stage].sentAt = sentAt; }
     if (stage === 'checkin') meta.checkin.invitedAt = sentAt;
@@ -868,8 +896,12 @@ function completeCheckin_(id, token, guests) {
         category: i < Number(meta.adults) ? 'dospělý' : 'dítě',
         feeAmount: i < Number(meta.adults) && Number(meta.adults) ? Math.round(Number(meta.pricing.localFee || 0) / Number(meta.adults)) : 0,
         feeExemption: i < Number(meta.adults) ? '' : 'osoba mladší 18 let' };
-      if (!row.firstName || !row.lastName || !/^\d{4}-\d{2}-\d{2}$/.test(row.birthDate) ||
-          !parseDate(row.birthDate) || !row.address || !row.documentType || !row.documentNumber || !row.citizenship)
+      var isChild = i >= Number(meta.adults);
+      var noDocument = !row.documentType && !row.documentNumber;
+      var completeDocument = !!row.documentType && !!row.documentNumber;
+      if (!row.firstName || !row.lastName || !/^(?:\d{4})-(?:\d{2})-(?:\d{2})$/.test(row.birthDate) ||
+          !parseDate(row.birthDate) || !row.address || !row.citizenship ||
+          (!isChild && (!row.documentType || !row.documentNumber)))
         return { ok: false, error: 'fields' };
       clean.push(row);
     }
