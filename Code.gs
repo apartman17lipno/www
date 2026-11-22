@@ -408,7 +408,7 @@ function confirmEvent_(ev, sendMail) {
             (i.children !== '' ? '\nDěti: ' + i.children + ' (bez místního poplatku)' : '') +
             (i.localFee ? '\nMístní poplatek: ' + i.localFee : '') +
             (i.price ? '\nCena za pobyt: ' + i.price : '') +
-            '\n\nS dotazy nebo upřesněním příjezdu odpovězte prosím na tento e-mail.\n\nS pozdravem\nApartmán Costa Plana' });
+            '\n\nS dotazy nebo upřesněním příjezdu odpovězte prosím na tento e-mail.\n\nS pozdravem\nApartmán 17 - Costa Plana' });
   }
 }
 
@@ -419,7 +419,7 @@ function rejectEvent_(ev, sendMail) {
       subject: 'Poptávka termínu – apartmán Costa Plana',
       body: 'Dobrý den,\n\nděkujeme za zájem o apartmán Costa Plana. Bohužel vám v požadovaném termínu (' +
             czDate(i.from) + ' – ' + czDate(i.to) + ') nemůžeme apartmán potvrdit.\n\n' +
-            'Rádi vám navrhneme jiný termín, stačí odpovědět na tento e-mail.\n\nS pozdravem\nApartmán Costa Plana' });
+            'Rádi vám navrhneme jiný termín, stačí odpovědět na tento e-mail.\n\nS pozdravem\nApartmán 17 - Costa Plana' });
   }
   ev.deleteEvent();
 }
@@ -518,7 +518,7 @@ function adminReject_(id, sendMail, actor) {
         body: 'Dobrý den,\n\nděkujeme za zájem o apartmán Costa Plana. Požadovaný termín ' +
           czDate(Utilities.formatDate(ev.getStartTime(), getCal().getTimeZone(), 'yyyy-MM-dd')) + ' – ' +
           czDate(Utilities.formatDate(ev.getEndTime(), getCal().getTimeZone(), 'yyyy-MM-dd')) +
-          ' bohužel nemůžeme potvrdit.\n\nS pozdravem\nApartmán Costa Plana' });
+          ' bohužel nemůžeme potvrdit.\n\nS pozdravem\nApartmán 17 - Costa Plana' });
     }
     ev.setTitle('Zamítnutá: ' + (meta.email || 'rezervace')); ev.setColor(CalendarApp.EventColor.GRAY);
     saveReservationMeta_(ev, meta); return { ok: true };
@@ -724,7 +724,7 @@ function processCheckoutReminder() {
           name: 'Apartmán Costa Plana',
           subject: 'Zítra končí pobyt – rezervace č. ' + meta.reservationNumber,
           body: 'Dobrý den,\n\npobyt z rezervace č. ' + meta.reservationNumber + ' končí zítra ' + czDate(departure) +
-            '.\nPokud bude potřeba, je třeba apartmán uklidit a připravit na další pobyt.\n\nS pozdravem\nApartmán Costa Plana'
+            '.\nPokud bude potřeba, je třeba apartmán uklidit a připravit na další pobyt.\n\nS pozdravem\nApartmán 17 - Costa Plana'
         });
         meta.notifications.checkoutReminder.state = 'sent';
         meta.notifications.checkoutReminder.sentAt = new Date().toISOString();
@@ -753,7 +753,7 @@ function lifecycleEmailBody_(ev, meta, stage) {
       '\n\nPlatbu prosím zašlete na účet: ' + settings.bankAccount +
       (settings.accountName ? ' (' + settings.accountName + ')' : '') +
       '\nVariabilní symbol: ' + meta.reservationNumber +
-      '\n\nS pozdravem\nApartmán Costa Plana' };
+      '\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   if (stage === 'balance') return { subject: (paid > 0 ? 'Doplatek rezervace – Costa Plana' : 'Platba rezervace – Costa Plana'),
     body: greeting + (paid > 0
       ? 'Blíží se váš pobyt v apartmánu Costa Plana. Prosíme o doplacení zbývající částky.'
@@ -761,12 +761,12 @@ function lifecycleEmailBody_(ev, meta, stage) {
       czDate(from) + '\nOdjezd: ' + czDate(to) + '\nCena celkem: ' + money(meta.pricing.total) +
       '\nDosud uhrazeno: ' + money(paid) + '\nZbývá uhradit: ' + money(remaining) +
       '\n\nÚčet: ' + settings.bankAccount + (settings.accountName ? ' (' + settings.accountName + ')' : '') +
-      '\nVariabilní symbol: ' + meta.reservationNumber + '\n\nS pozdravem\nApartmán Costa Plana' };
-  if (stage === 'code') return { subject: 'Přístupový kód k apartmánu Costa Plana', body: greeting + 'váš online check-in je dokončen. Přístupový kód: ' + settings.accessCode + '\n\nS pozdravem\nApartmán Costa Plana' };
+      '\nVariabilní symbol: ' + meta.reservationNumber + '\n\nS pozdravem\nApartmán 17 - Costa Plana' };
+  if (stage === 'code') return { subject: 'Přístupový kód k apartmánu Costa Plana', body: greeting + 'váš online check-in je dokončen. Přístupový kód: ' + settings.accessCode + '\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   if (stage === 'checkin') return { subject: 'Online check-in před pobytem – Costa Plana',
     body: greeting + 'vaše rezervace je plně uhrazena. Vyplňte prosím online check-in před příjezdem:\n\n' +
       meta.checkin.url + '\n\nPříjezd: ' + czDate(from) + '\nOdjezd: ' + czDate(to) +
-      '\n\nPo dokončení vám zašleme přístupový kód k apartmánu.\n\nS pozdravem\nApartmán Costa Plana' };
+      '\n\nPo dokončení vám zašleme přístupový kód k apartmánu.\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   return null;
 }
 function createPaymentQr_(account, amount, variableSymbol) {
@@ -831,7 +831,13 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
     var qr = (stage === 'deposit' || stage === 'balance') ? createPaymentQr_(settings.bankAccount, stage === 'deposit' ? Math.max(0, Number(meta.pricing.deposit || 0) - totalPaid_(meta)) : Math.max(0, Number(meta.pricing.total || 0) - totalPaid_(meta)), meta.reservationNumber) : null;
     var emailOptions = { to: meta.email, replyTo: OWNER, name: 'Apartmán Costa Plana', subject: mail.subject, body: mail.body };
     if (qr) {
-      emailOptions.htmlBody = '<div style="font-family:Arial,sans-serif;white-space:pre-line">' + esc(mail.body) + '<br><br><strong>QR platba</strong><br><img src="cid:paymentQr" alt="QR kód pro platbu" width="220" height="220"></div>';
+      var signature = '\n\nS pozdravem\nApartmán 17 - Costa Plana';
+      var markerAt = mail.body.lastIndexOf(signature);
+      var beforeSignature = markerAt >= 0 ? mail.body.slice(0, markerAt) : mail.body;
+      var signatureHtml = markerAt >= 0 ? '<br><br>' + esc('S pozdravem\nApartmán 17 - Costa Plana') : '';
+      emailOptions.htmlBody = '<div style="font-family:Arial,sans-serif;white-space:pre-line">' + esc(beforeSignature) +
+        '<br><br><strong>QR platba</strong><br><img src="cid:paymentQr" alt="QR kód pro platbu" width="220" height="220">' +
+        signatureHtml + '</div>';
       emailOptions.inlineImages = { paymentQr: qr };
     }
     MailApp.sendEmail(emailOptions);
@@ -968,7 +974,7 @@ function completeCheckin_(id, token, guests) {
           'Váš přístupový kód k apartmánu: ' + settings.accessCode +
           '\n\nPříjezd: ' + czDate(Utilities.formatDate(ev.getStartTime(), getCal().getTimeZone(), 'yyyy-MM-dd')) +
           '\nOdjezd: ' + czDate(Utilities.formatDate(ev.getEndTime(), getCal().getTimeZone(), 'yyyy-MM-dd')) +
-          '\n\nS pozdravem\nApartmán Costa Plana' });
+          '\n\nS pozdravem\nApartmán 17 - Costa Plana' });
       meta.notifications.code.state = 'sent'; meta.notifications.code.sentAt = new Date().toISOString();
       addHistory_(meta, 'E-mail s přístupovým kódem odeslán', 'system', {});
       saveReservationMeta_(ev, meta);
