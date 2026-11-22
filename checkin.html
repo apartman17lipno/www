@@ -25,7 +25,8 @@ button:disabled{opacity:.6}.copy-address{margin-top:6px;padding:7px 12px;backgro
 var CHECKIN={id:'<?= reservationId ?>',token:'<?= token ?>',adults:<?= adults ?>,children:<?= children ?>,guestCount:<?= guestCount ?>};
 var box=document.getElementById('guests');
 var count=CHECKIN.guestCount;
-document.getElementById('hostCount').textContent='Údaje vyplňte za '+count+(count===1?' ubytovanou osobu.':' ubytované osoby.')+' Údaje slouží k evidenci hostů a místního poplatku.';
+var guestLabel=count===1?'1 ubytovanou osobu':(count<=4?count+' ubytované osoby':count+' ubytovaných osob');
+document.getElementById('hostCount').textContent='Stav: online check-in čeká na dokončení. Vyplňte prosím údaje za '+guestLabel+'. Údaje slouží k evidenci hostů a místního poplatku.';
 for(var i=0;i<count;i++){
  var category=i<CHECKIN.adults?'dospělý host':'dítě';
  var section=document.createElement('section');section.className='guest';
