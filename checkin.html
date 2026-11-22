@@ -53,7 +53,7 @@ document.getElementById('form').addEventListener('submit',function(event){
  });
  button.disabled=true;status.className='';status.textContent='Odesílám údaje…';
  google.script.run.withSuccessHandler(function(result){
-  if(result&&result.ok){document.getElementById('form').hidden=true;status.className='success';status.textContent=result.warning?'Online check-in byl dokončen. E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Online check-in byl dokončen. Potvrzení s přístupovým kódem vám přijde e-mailem.';}
+  if(result&&result.ok){box.hidden=true;button.hidden=true;document.querySelector('h1').textContent='Online check-in byl dokončen';document.getElementById('hostCount').textContent='Online check-in byl dokončen.';status.className='success';status.textContent=result.warning?'E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Potvrzení s přístupovým kódem vám přijde e-mailem.';}
   else{button.disabled=false;status.className='error';status.textContent=result&&result.error==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';}
  }).withFailureHandler(function(){button.disabled=false;status.className='error';status.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.'})
  .submitOnlineCheckin(CHECKIN.id,CHECKIN.token,entries);
