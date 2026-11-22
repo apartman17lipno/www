@@ -239,7 +239,7 @@ function card(e){
       paybox.appendChild(el('h2','','Online check-in dokončen – '+new Date(e.checkin.completedAt).toLocaleString('cs-CZ')));
       e.checkin.guestData.forEach(function(g,i){paybox.appendChild(el('div','line', (i+1)+'. '+g.firstName+' '+g.lastName+' · '+g.birthDate+' · '+g.address+' · '+g.citizenship+(g.documentType||g.documentNumber?' · doklad '+[g.documentType,g.documentNumber].filter(Boolean).join(' '):' · doklad neuveden')+' · poplatek '+money(g.feeAmount)+(g.feeExemption?' · '+g.feeExemption:'')));});
     }
-    var notices=e.notifications||{}, names={deposit:'Záloha',balance:'Doplatek',checkin:'Výzva k online check-inu',code:'Přístupový kód'};
+    var notices=e.notifications||{}, names={deposit:'Záloha',balance:'Doplatek',checkin:'Výzva k online check-inu',code:'Přístupový kód',checkoutReminder:'Připomínka přípravy apartmánu'};
     Object.keys(names).forEach(function(k){var n=notices[k];if(n)paybox.appendChild(el('div','line muted small',names[k]+': '+(n.sentAt?'odesláno '+new Date(n.sentAt).toLocaleString('cs-CZ'):n.state==='error'?'chyba při odesílání':'odesílání zahájeno')));});
     if(e.history&&e.history.length){var hist=el('details');var sum=el('summary','', 'Historie změn ('+e.history.length+')');hist.appendChild(sum);e.history.slice().reverse().forEach(function(h){hist.appendChild(el('div','line muted small',historyLine(h)));});paybox.appendChild(hist);}
     c.appendChild(paybox);
