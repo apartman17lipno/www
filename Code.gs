@@ -665,9 +665,13 @@ function daysUntil_(iso, tz) {
 }
 function setupReservationAutomation() {
   var triggers = ScriptApp.getProjectTriggers();
-  var exists = triggers.some(function (t) { return t.getHandlerFunction() === 'processReservationLifecycle'; });
-  if (!exists) ScriptApp.newTrigger('processReservationLifecycle').timeBased().everyDays(1).atHour(7).inTimezone(getCal().getTimeZone()).create();
-  return { ok: true, installed: true, alreadyExisted: exists };
+  var timezone = getCal().getTimeZone();
+  var lifecycleExists = triggers.some(function (t) { return t.getHandlerFunction() === 'processReservationLifecycle'; });
+  var checkoutExists = triggers.some(function (t) { return t.getHandlerFunction() === 'processCheckoutReminder'; });
+  if (!lifecycleExists) ScriptApp.newTrigger('processReservationLifecycle').timeBased().everyDays(1).atHour(7).inTimezone(timezone).create();
+  // Google time triggers are approximate; minute 15 keeps execution at or after 18:00 local time.
+  if (!checkoutExists) ScriptApp.newTrigger('processCheckoutReminder').timeBased().everyDays(1).atHour(18).nearMinute(15).inTimezone(timezone).create();
+  return { ok: true, installed: true, alreadyExisted: lifecycleExists, checkoutReminderInstalled: true, checkoutReminderAlreadyExisted: checkoutExists };
 }
 function processReservationLifecycle() {
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
@@ -691,6 +695,47 @@ function processReservationLifecycle() {
           meta.status === 'Zaplacená' && !(meta.notifications && meta.notifications.checkin)) {
         sendLifecycleEmail_(ev, meta, 'checkin', false, 'automatizace');
       }
+    });
+  } finally { lock.releaseLock(); }
+}
+function processCheckoutReminder() {
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var cal = getCal(), tz = cal.getTimeZone();
+    var today = parseDate(Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'));
+    var departureDay = new Date(today.getTime()); departureDay.setDate(departureDay.getDate() + 1);
+    var departure = Utilities.formatDate(departureDay, tz, 'yyyy-MM-dd');
+    var scanStart = new Date(today.getTime()); scanStart.setDate(scanStart.getDate() - MAX_NIGHTS - 1);
+    var scanEnd = new Date(departureDay.getTime()); scanEnd.setDate(scanEnd.getDate() + 1);
+    cal.getEvents(scanStart, scanEnd).forEach(function (ev) {
+      var meta = readReservationMeta_(ev);
+      if (!meta || meta.status !== 'Online check-in dokončen' || !meta.checkin || !meta.checkin.completedAt ||
+          Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd') !== departure ||
+          (meta.notifications && meta.notifications.checkoutReminder)) return;
+      if (!meta.notifications) meta.notifications = {};
+      var attemptAt = new Date().toISOString();
+      meta.notifications.checkoutReminder = { state: 'claimed', attemptAt: attemptAt, forDeparture: departure };
+      addHistory_(meta, 'Připomínka přípravy apartmánu', 'automatizace', { departure: departure, state: 'claimed' });
+      saveReservationMeta_(ev, meta);
+      try {
+        MailApp.sendEmail({
+          to: NOTIFY.join(','),
+          replyTo: OWNER,
+          name: 'Apartmán Costa Plana',
+          subject: 'Zítra končí pobyt – rezervace č. ' + meta.reservationNumber,
+          body: 'Dobrý den,\n\npobyt z rezervace č. ' + meta.reservationNumber + ' končí zítra ' + czDate(departure) +
+            '.\nPokud bude potřeba, je třeba apartmán uklidit a připravit na další pobyt.\n\nS pozdravem\nApartmán Costa Plana'
+        });
+        meta.notifications.checkoutReminder.state = 'sent';
+        meta.notifications.checkoutReminder.sentAt = new Date().toISOString();
+        addHistory_(meta, 'Připomínka přípravy apartmánu odeslána', 'automatizace', { departure: departure });
+      } catch (err) {
+        meta.notifications.checkoutReminder.state = 'error';
+        meta.notifications.checkoutReminder.errorAt = new Date().toISOString();
+        addHistory_(meta, 'Chyba při odesílání připomínky přípravy apartmánu', 'automatizace', { message: String(err).slice(0, 200) });
+        console.error(err);
+      }
+      saveReservationMeta_(ev, meta);
     });
   } finally { lock.releaseLock(); }
 }
