@@ -49,7 +49,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
   <p class="small" id="loginInfo" style="margin-top:12px" role="status"></p>
 </div>
 <div id="app" hidden>
-<div class="tabs"><button class="tab on" data-tab="t1">Poptávky a rezervace <span id="cnt"></span></button><button class="tab" data-tab="t2">Ceník</button></div>
+<div class="tabs"><button class="tab on" data-tab="t1">Poptávky a rezervace <span id="cnt"></span></button><button class="tab" data-tab="t2">Ceník</button><button class="tab" data-tab="t3">Platební údaje a přístupový kód</button></div>
 
 <section id="t1">
   <div class="panel">
@@ -64,16 +64,6 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
       <p class="muted small">Lze vybrat více stavů. Bez výběru se zobrazují všechny rezervace.</p>
     </div>
     <div id="list" style="margin-top:14px"><p class="muted">Načítám…</p></div>
-  </div>
-  <div class="panel">
-    <h2>Platební údaje a přístupový kód</h2>
-    <p class="muted small">Údaje se ukládají do nastavení Apps Scriptu. QR platba zatím není zapnutá.</p>
-    <div class="row">
-      <label>Jméno příjemce<input id="l-account-name" maxlength="100"></label>
-      <label>Bankovní účet / IBAN<input id="l-bank-account" maxlength="100" autocomplete="off"></label>
-      <label>Přístupový kód k apartmánu<input id="l-access-code" maxlength="100" autocomplete="off"></label>
-    </div>
-    <div class="acts"><button class="b" id="saveLifecycleSettings">Uložit nastavení</button></div>
   </div>
   <div class="panel">
     <h2>Přidat rezervaci nebo blokaci</h2>
@@ -106,6 +96,19 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
     <p class="muted small">Nové ceny se na webu zobrazí po obnovení stránky. Rezervace už vytvořené zůstávají s původní cenou.</p>
   </div>
 </section>
+
+<section id="t3" hidden>
+  <div class="panel">
+    <h2>Platební údaje a přístupový kód</h2>
+    <p class="muted small">Údaje se ukládají do nastavení Apps Scriptu. QR platba zatím není zapnutá.</p>
+    <div class="row">
+      <label>Jméno příjemce<input id="l-account-name" maxlength="100"></label>
+      <label>Bankovní účet / IBAN<input id="l-bank-account" maxlength="100" autocomplete="off"></label>
+      <label>Přístupový kód k apartmánu<input id="l-access-code" maxlength="100" autocomplete="off"></label>
+    </div>
+    <div class="acts"><button class="b" id="saveLifecycleSettings">Uložit nastavení</button></div>
+  </div>
+</section>
 </div>
 </div>
 <script>
@@ -115,7 +118,7 @@ function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null
 function cz(i){var a=i.split('-');return (+a[2])+'. '+(+a[1])+'. '+a[0];}
 function nights(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);}
 function noun(n){return n+' '+(n===1?'noc':n<5?'noci':'nocí');}
-var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v nastavení níže.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
+var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v záložce Platební údaje a přístupový kód.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
 function toast(t,bad){var m=$('msg');m.textContent=t;m.className='toast '+(bad?'bad':'ok');m.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){m.hidden=true;},6000);}
 var EP='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec',KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
 // Veřejné GET volání přes <script> (jen config a nonce, bez tajných údajů)
@@ -336,7 +339,7 @@ $('a-btn').onclick=function(){
 $('reload').onclick=function(){load(true);};
 Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(b){b.onclick=function(){
   Array.prototype.forEach.call(document.querySelectorAll('.tab'),function(x){x.classList.toggle('on',x===b);});
-  $('t1').hidden=b.dataset.tab!=='t1';$('t2').hidden=b.dataset.tab!=='t2';};});
+  Array.prototype.forEach.call(document.querySelectorAll('#app > section'),function(sec){sec.hidden=sec.id!==b.dataset.tab;});};});
 $('logout').onclick=function(){
   var t=getSess();clearSess();show(false);info('');
   if(t)post({action:'logout',s:t}).catch(function(){});
