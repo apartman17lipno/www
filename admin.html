@@ -299,6 +299,7 @@ function render(withPrices){
   renderStatusFilter();
   var box=$('list');box.textContent='';
   var filtered=data.events.filter(function(e){return !selectedStatuses.length||selectedStatuses.indexOf(eventStatus(e))>=0;});
+  filtered.sort(function(a,b){return String(a.from||'').localeCompare(String(b.from||''))||String(a.to||'').localeCompare(String(b.to||''));});
   if(!filtered.length)box.appendChild(el('p','muted',data.events.length?'Žádné rezervace neodpovídají vybraným stavům.':'Žádné nadcházející události.'));
   filtered.forEach(function(e){box.appendChild(card(e));});
   var n=data.events.filter(function(e){return e.type==='inquiry'||(e.lifecycle&&e.status==='Ke schválení');}).length;
