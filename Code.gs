@@ -551,7 +551,7 @@ function adminCancel_(id, actor) {
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     var ev = getCal().getEventById(String(id || '')), meta = ev && readReservationMeta_(ev);
-    if (!ev || !meta || meta.status === 'Online check-in dokončen' || meta.status === 'Zrušená' || meta.status === 'Zamítnutá')
+    if (!ev || !meta || meta.status === 'Online check-in dokončen' || meta.status === 'Pobyt ukončen' || meta.status === 'Zrušená' || meta.status === 'Zamítnutá')
       return { ok: false, error: 'notfound' };
     meta.status = 'Zrušená'; meta.cancelledAt = new Date().toISOString();
     addHistory_(meta, 'Zrušení rezervace', actor, { status: meta.status });
@@ -647,7 +647,7 @@ function adminSaveLifecycleSettings_(settings) {
   return { ok: true };
 }
 function refreshReservationStatus_(meta) {
-  if (meta.status === 'Zamítnutá' || meta.status === 'Zrušená') return;
+  if (meta.status === 'Zamítnutá' || meta.status === 'Zrušená' || meta.status === 'Pobyt ukončen') return;
   if (meta.checkin && meta.checkin.completedAt) { meta.status = 'Online check-in dokončen'; return; }
   if (meta.checkin && meta.checkin.invitedAt) { meta.status = 'Čeká na online check-in'; return; }
   var paid = totalPaid_(meta), total = Number(meta.pricing.total || 0);
@@ -668,10 +668,14 @@ function setupReservationAutomation() {
   var timezone = getCal().getTimeZone();
   var lifecycleExists = triggers.some(function (t) { return t.getHandlerFunction() === 'processReservationLifecycle'; });
   var checkoutExists = triggers.some(function (t) { return t.getHandlerFunction() === 'processCheckoutReminder'; });
+  var stayEndExists = triggers.some(function (t) { return t.getHandlerFunction() === 'processStayEndNotifications'; });
   if (!lifecycleExists) ScriptApp.newTrigger('processReservationLifecycle').timeBased().everyDays(1).atHour(7).inTimezone(timezone).create();
-  // Google time triggers are approximate; minute 15 keeps execution at or after 18:00 local time.
+  // Apps Script time triggers are approximate; this runs around 18:00 local time, after the prior-day reminder window begins.
   if (!checkoutExists) ScriptApp.newTrigger('processCheckoutReminder').timeBased().everyDays(1).atHour(18).nearMinute(15).inTimezone(timezone).create();
-  return { ok: true, installed: true, alreadyExisted: lifecycleExists, checkoutReminderInstalled: true, checkoutReminderAlreadyExisted: checkoutExists };
+  // Keep this after 11:00 local time so the day-of-departure message is not sent early.
+  if (!stayEndExists) ScriptApp.newTrigger('processStayEndNotifications').timeBased().everyDays(1).atHour(11).nearMinute(15).inTimezone(timezone).create();
+  return { ok: true, installed: true, alreadyExisted: lifecycleExists, checkoutReminderInstalled: true,
+    checkoutReminderAlreadyExisted: checkoutExists, stayEndNotificationInstalled: true, stayEndNotificationAlreadyExisted: stayEndExists };
 }
 function processReservationLifecycle() {
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
@@ -683,7 +687,7 @@ function processReservationLifecycle() {
       var meta = readReservationMeta_(ev);
       if (meta && !meta.reservationNumber) ensureReservationNumber_(ev, meta);
       if (!meta || !meta.approvedAt || meta.status === 'Zamítnutá' || meta.status === 'Zrušená' ||
-          meta.status === 'Online check-in dokončen') return;
+          meta.status === 'Online check-in dokončen' || meta.status === 'Pobyt ukončen') return;
       var arrival = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
       var days = daysUntil_(arrival, tz);
       if (days > 0 && days <= 14 && totalPaid_(meta) < Number(meta.pricing.total || 0) &&
@@ -733,6 +737,50 @@ function processCheckoutReminder() {
         meta.notifications.checkoutReminder.state = 'error';
         meta.notifications.checkoutReminder.errorAt = new Date().toISOString();
         addHistory_(meta, 'Chyba při odesílání připomínky přípravy apartmánu', 'automatizace', { message: String(err).slice(0, 200) });
+        console.error(err);
+      }
+      saveReservationMeta_(ev, meta);
+    });
+  } finally { lock.releaseLock(); }
+}
+function processStayEndNotifications() {
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var cal = getCal(), tz = cal.getTimeZone();
+    var todayKey = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+    var today = parseDate(todayKey), scanStart = new Date(today.getTime()), scanEnd = new Date(today.getTime());
+    scanStart.setDate(scanStart.getDate() - DAYS_AHEAD);
+    scanEnd.setDate(scanEnd.getDate() + 1);
+    cal.getEvents(scanStart, scanEnd).forEach(function (ev) {
+      var meta = readReservationMeta_(ev);
+      if (!meta || meta.status !== 'Online check-in dokončen' || !meta.checkin || !meta.checkin.completedAt) return;
+      var departure = Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd');
+      if (departure > todayKey || (meta.notifications && meta.notifications.stayEnded)) return;
+      if (!meta.reservationNumber) ensureReservationNumber_(ev, meta);
+      if (!meta.notifications) meta.notifications = {};
+      var attemptAt = new Date().toISOString();
+      meta.status = 'Pobyt ukončen';
+      meta.stayEndedAt = attemptAt;
+      meta.notifications.stayEnded = { state: 'claimed', attemptAt: attemptAt, forDeparture: departure };
+      addHistory_(meta, 'Pobyt ukončen', 'automatizace', { departure: departure, state: 'claimed' });
+      saveReservationMeta_(ev, meta);
+      try {
+        MailApp.sendEmail({
+          to: NOTIFY.join(','),
+          replyTo: OWNER,
+          name: 'Apartmán 17 - Costa Plana',
+          subject: 'Pobyt ukončen – rezervace č. ' + meta.reservationNumber,
+          body: 'Dobrý den,\n\npobyt z rezervace č. ' + meta.reservationNumber + ' skončil ' +
+            (departure === todayKey ? 'dnes ' : 'dne ') + czDate(departure) +
+            '.\nStav rezervace byl změněn na „Pobyt ukončen“.\n\nS pozdravem\nApartmán 17 - Costa Plana'
+        });
+        meta.notifications.stayEnded.state = 'sent';
+        meta.notifications.stayEnded.sentAt = new Date().toISOString();
+        addHistory_(meta, 'E-mail o ukončení pobytu odeslán', 'automatizace', { departure: departure });
+      } catch (err) {
+        meta.notifications.stayEnded.state = 'error';
+        meta.notifications.stayEnded.errorAt = new Date().toISOString();
+        addHistory_(meta, 'Chyba při odesílání e-mailu o ukončení pobytu', 'automatizace', { message: String(err).slice(0, 200) });
         console.error(err);
       }
       saveReservationMeta_(ev, meta);
@@ -860,7 +908,7 @@ function adminRecordPayment_(id, amount, actor) {
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     var ev = getCal().getEventById(String(id || '')), meta = ev && readReservationMeta_(ev);
-    if (!ev || !meta || !meta.approvedAt || meta.status === 'Zamítnutá' || meta.status === 'Zrušená')
+    if (!ev || !meta || !meta.approvedAt || meta.status === 'Zamítnutá' || meta.status === 'Zrušená' || meta.status === 'Pobyt ukončen')
       return { ok: false, error: 'state' };
     var n = validMoney_(amount), remaining = Number(meta.pricing.total) - totalPaid_(meta);
     if (n === null || n <= 0 || n > remaining) return { ok: false, error: 'amount' };
@@ -881,7 +929,7 @@ function adminRecordPayment_(id, amount, actor) {
 function adminResendEmail_(id, stage, actor) {
   var ev = getCal().getEventById(String(id || '')), meta = ev && readReservationMeta_(ev);
   if (!ev || !meta || ['deposit', 'balance', 'checkin', 'code'].indexOf(String(stage)) < 0 ||
-      meta.status === 'Zrušená' || meta.status === 'Zamítnutá') return { ok: false, error: 'state' };
+      meta.status === 'Zrušená' || meta.status === 'Zamítnutá' || meta.status === 'Pobyt ukončen') return { ok: false, error: 'state' };
   return sendLifecycleEmail_(ev, meta, String(stage), true, actor);
 }
 function adminReschedule_(id, fromValue, toValue, actor) {
@@ -890,7 +938,7 @@ function adminReschedule_(id, fromValue, toValue, actor) {
     var ev = getCal().getEventById(String(id || '')), meta = ev && readReservationMeta_(ev);
     var from = parseDate(fromValue), to = parseDate(toValue);
     if (!ev || !meta || !from || !to || to <= from || (to - from) / 86400000 > MAX_NIGHTS ||
-        meta.status === 'Zamítnutá' || meta.status === 'Zrušená') return { ok: false, error: 'dates' };
+        meta.status === 'Zamítnutá' || meta.status === 'Zrušená' || meta.status === 'Pobyt ukončen') return { ok: false, error: 'dates' };
     var cal = getCal(), conflicts = cal.getEvents(from, to).some(function (other) {
       if (other.getId() === ev.getId()) return false;
       var m = readReservationMeta_(other);
