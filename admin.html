@@ -37,6 +37,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
 .toast.ok{background:#c9ead6;color:#10432a}.toast.bad{background:#f6d3cf;color:#6b1a10}
 .login{max-width:420px;margin:40px auto}.login p{margin:0 0 12px}.login .row{align-items:end}
 .login{max-width:420px;margin:40px auto}.login p{margin:0 0 12px}.login .row{align-items:end}
+.status-filter{display:grid;gap:8px;margin-top:14px}.status-filter>strong{font-size:.92rem}.status-filter details{position:relative;max-width:420px}.status-filter summary{cursor:pointer;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg);list-style-position:inside}.status-filter details[open]{padding:8px;border:1px solid var(--line);border-radius:10px}.status-filter #stateFilterOptions{max-height:240px;overflow:auto;padding:4px 0}.status-filter #stateFilterOptions label{display:flex;align-items:center;gap:8px;padding:5px 4px;font-weight:400}.status-filter #stateFilterOptions input{width:auto;margin:0}.status-filter .b{margin-top:4px}
 </style></head>
 <body><div class="wrap">
 <header><h1>Costa Plana – administrace</h1><div><button class="b o" id="reload" hidden>Obnovit</button> <button class="b o" id="logout" hidden>Odhlásit</button></div></header>
@@ -53,6 +54,15 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
 <section id="t1">
   <div class="panel">
     <label class="chk"><input type="checkbox" id="mailGuest" checked> Při zamítnutí poslat hostovi e-mail</label>
+    <div class="status-filter">
+      <strong>Filtrovat podle stavu</strong>
+      <details id="stateFilter">
+        <summary id="stateFilterLabel">Všechny stavy</summary>
+        <div id="stateFilterOptions"></div>
+        <button class="b o" type="button" id="clearStateFilter">Zrušit výběr</button>
+      </details>
+      <p class="muted small">Lze vybrat více stavů. Bez výběru se zobrazují všechny rezervace.</p>
+    </div>
     <div id="list" style="margin-top:14px"><p class="muted">Načítám…</p></div>
   </div>
   <div class="panel">
@@ -99,7 +109,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
 </div>
 </div>
 <script>
-var data=null;
+var data=null,selectedStatuses=[];
 function $(id){return document.getElementById(id);}
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
 function cz(i){var a=i.split('-');return (+a[2])+'. '+(+a[1])+'. '+a[0];}
@@ -261,15 +271,39 @@ function card(e){
   if(acts.childNodes.length)c.appendChild(acts);
   return c;
 }
+function eventStatus(e){
+  return e.lifecycle?(e.status||'Rezervace'):({inquiry:'Poptávka',booked:'Rezervace',block:'Blokace',other:'Jiná událost'}[e.type]||'Jiná událost');
+}
+function renderStatusFilter(){
+  var opts=$('stateFilterOptions');opts.textContent='';
+  var states={};data.events.forEach(function(e){states[eventStatus(e)]=true;});
+  var names=Object.keys(states).sort(function(a,b){return a.localeCompare(b,'cs');});
+  selectedStatuses=selectedStatuses.filter(function(s){return !!states[s];});
+  names.forEach(function(state){
+    var label=el('label'),input=el('input');input.type='checkbox';input.value=state;input.checked=selectedStatuses.indexOf(state)>=0;
+    input.addEventListener('change',function(){
+      var at=selectedStatuses.indexOf(state);
+      if(input.checked&&at<0)selectedStatuses.push(state);
+      else if(!input.checked&&at>=0)selectedStatuses.splice(at,1);
+      render();
+    });
+    label.appendChild(input);label.appendChild(document.createTextNode(state));opts.appendChild(label);
+  });
+  $('stateFilterLabel').textContent=selectedStatuses.length?('Vybráno stavů: '+selectedStatuses.length):'Všechny stavy';
+}
 function render(withPrices){
+  if(!data)return;
+  renderStatusFilter();
   var box=$('list');box.textContent='';
-  if(!data.events.length)box.appendChild(el('p','muted','Žádné nadcházející události.'));
-  data.events.forEach(function(e){box.appendChild(card(e));});
+  var filtered=data.events.filter(function(e){return !selectedStatuses.length||selectedStatuses.indexOf(eventStatus(e))>=0;});
+  if(!filtered.length)box.appendChild(el('p','muted',data.events.length?'Žádné rezervace neodpovídají vybraným stavům.':'Žádné nadcházející události.'));
+  filtered.forEach(function(e){box.appendChild(card(e));});
   var n=data.events.filter(function(e){return e.type==='inquiry'||(e.lifecycle&&e.status==='Ke schválení');}).length;
   $('cnt').textContent=n?'('+n+')':'';
   if(data.settings){$('l-account-name').value=data.settings.accountName||'';$('l-bank-account').value=data.settings.bankAccount||'';$('l-access-code').value=data.settings.accessCode||'';}
   if(withPrices)renderPrices();
 }
+$('clearStateFilter').addEventListener('click',function(){selectedStatuses=[];render();});
 function mdToDm(md){var a=md.split('-');return (+a[1])+'.'+(+a[0])+'.';}
 function dmToMd(s){var m=/^\s*(\d{1,2})\.\s*(\d{1,2})\.?\s*$/.exec(s);if(!m)return null;var d=+m[1],mo=+m[2];if(mo<1||mo>12||d<1||d>31)return null;return (mo<10?'0':'')+mo+'-'+(d<10?'0':'')+d;}
 function ruleRow(r){
