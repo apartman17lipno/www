@@ -198,7 +198,7 @@ function adminCall_(d) {
     adminAdd: adminAdd_, adminSavePrices: adminSavePrices_,
     adminRecordPayment: adminRecordPayment_, adminResendEmail: adminResendEmail_,
     adminReschedule: adminReschedule_, adminSaveLifecycleSettings: adminSaveLifecycleSettings_,
-    adminMigrateLegacy: adminMigrateLegacy_
+    adminMigrateLegacy: adminMigrateLegacy_, adminGuestbookPdf: adminGuestbookPdf_
   };
   if (!Object.prototype.hasOwnProperty.call(funcs, name)) return { ok: false, error: 'fn' };
   console.log('Správce ' + email + ': ' + name);
@@ -210,6 +210,7 @@ function adminCall_(d) {
   if (name === 'adminMigrateLegacy') return adminMigrateLegacy_(args[0], args[1], args[2], args[3], email);
   if (name === 'adminReject') return adminReject_(args[0], args[1], email);
   if (name === 'adminConfirm') return adminApprove_(args[0], email);
+  if (name === 'adminGuestbookPdf') return adminGuestbookPdf_(args[0], args[1]);
   return funcs[name].apply(null, args);
 }
 
@@ -448,6 +449,67 @@ function adminList_() {
   });
   var settings = lifecycleSettings_();
   return { ok: true, events: list, prices: getPrices(), settings: settings };
+  } finally { lock.releaseLock(); }
+}
+
+// Vytvoří PDF evidenční knihy pouze z pobytů, které jsou uzavřené a mají dokončený check-in.
+function adminGuestbookPdf_(fromValue, toValue) {
+  var from = parseDate(fromValue), to = parseDate(toValue);
+  if (!from || !to || from > to) return { ok: false, error: 'dates' };
+  var today = parseDate(Utilities.formatDate(new Date(), getCal().getTimeZone(), 'yyyy-MM-dd'));
+  if (to > today) return { ok: false, error: 'dates' };
+  var spanDays = nightsBetween_(Utilities.formatDate(from, getCal().getTimeZone(), 'yyyy-MM-dd'),
+    Utilities.formatDate(to, getCal().getTimeZone(), 'yyyy-MM-dd'));
+  if (spanDays > 2190) return { ok: false, error: 'range' };
+
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var cal = getCal(), tz = cal.getTimeZone(), endExclusive = new Date(to.getTime());
+    endExclusive.setDate(endExclusive.getDate() + 1);
+    var entries = [], incompleteGuests = 0;
+    cal.getEvents(from, endExclusive).forEach(function (ev) {
+      var meta = readReservationMeta_(ev);
+      if (!meta || meta.status !== 'Pobyt ukončen' || !meta.checkin || !meta.checkin.completedAt ||
+          !Array.isArray(meta.checkin.guestData)) return;
+      var arrival = Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd');
+      if (arrival < fromValue || arrival > toValue) return;
+      meta.checkin.guestData.forEach(function (guest) {
+        guest = guest || {};
+        var missing = [];
+        if (!guest.firstName) missing.push('jméno');
+        if (!guest.lastName) missing.push('příjmení');
+        if (!guest.address) missing.push('adresa');
+        if (!guest.birthDate) missing.push('datum narození');
+        if (!guest.documentType || !guest.documentNumber) missing.push('doklad totožnosti');
+        if (!guest.citizenship) missing.push('státní občanství');
+        if (guest.feeAmount == null && !guest.feeExemption) missing.push('výše poplatku nebo důvod osvobození');
+        if (missing.length) incompleteGuests++;
+        entries.push({
+          reservationNumber: meta.reservationNumber || '',
+          from: arrival,
+          to: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd'),
+          firstName: guest.firstName || '', lastName: guest.lastName || '',
+          birthDate: guest.birthDate || '', address: guest.address || '',
+          documentType: guest.documentType || '', documentNumber: guest.documentNumber || '',
+          citizenship: guest.citizenship || '', feeAmount: Number(guest.feeAmount || 0),
+          feeExemption: guest.feeExemption || '', missing: missing.join(', ')
+        });
+      });
+    });
+    entries.sort(function (a, b) {
+      return a.from.localeCompare(b.from) || a.lastName.localeCompare(b.lastName, 'cs') || a.firstName.localeCompare(b.firstName, 'cs');
+    });
+    if (!entries.length) return { ok: false, error: 'empty' };
+
+    var tpl = HtmlService.createTemplateFromFile('guestbook');
+    tpl.entries = entries;
+    tpl.periodFrom = czDate(fromValue); tpl.periodTo = czDate(toValue);
+    tpl.generatedAt = Utilities.formatDate(new Date(), tz, 'd. M. yyyy HH:mm');
+    tpl.incompleteGuests = incompleteGuests;
+    var pdf = tpl.evaluate().getBlob().getAs(MimeType.PDF)
+      .setName('evidencni-kniha-hostu-' + fromValue + '-az-' + toValue + '.pdf');
+    return { ok: true, fileName: pdf.getName(), pdf: Utilities.base64Encode(pdf.getBytes()),
+      entries: entries.length, incompleteGuests: incompleteGuests };
   } finally { lock.releaseLock(); }
 }
 
@@ -1062,4 +1124,5 @@ function out(obj, callback) {
   }
   return ContentService.createTextOutput(json).setMimeType(ContentService.MimeType.JSON);
 }
+
 

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    body { font: 8pt Arial, sans-serif; color: #172f35; }
+    h1 { margin: 0 0 4px; font-size: 16pt; }
+    p { margin: 3px 0; }
+    .meta { margin-bottom: 10px; color: #405a60; }
+    .warning { margin: 8px 0; padding: 6px; background: #fff1d6; border: 1px solid #ddb65d; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #9aabad; padding: 4px 3px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+    th { background: #e8efed; font-size: 7pt; }
+    tr.incomplete td { background: #fff8e9; }
+    .fee { text-align: right; white-space: nowrap; }
+    .missing { color: #8b2b1d; font-weight: bold; }
+    .foot { margin-top: 8px; color: #52666a; font-size: 7pt; }
+  </style>
+</head>
+<body>
+  <h1>Evidenční kniha hostů – poplatek z pobytu</h1>
+  <p class="meta">Apartmán 17 – Costa Plana · období pobytu: <?= periodFrom ?> až <?= periodTo ?> · vygenerováno: <?= generatedAt ?> · záznamů: <?= entries.length ?></p>
+  <? if (incompleteGuests) { ?>
+    <p class="warning"><strong>Kontrola údajů:</strong> u <?= incompleteGuests ?> hostů chybí některý evidovaný údaj. Neúplné záznamy jsou zvýrazněné a označené v posledním sloupci.</p>
+  <? } ?>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:6%">Číslo rezervace</th>
+        <th style="width:7%">Pobyt od</th>
+        <th style="width:7%">Pobyt do</th>
+        <th style="width:9%">Jméno</th>
+        <th style="width:10%">Příjmení</th>
+        <th style="width:8%">Datum narození</th>
+        <th style="width:15%">Adresa místa přihlášení</th>
+        <th style="width:8%">Druh dokladu</th>
+        <th style="width:9%">Číslo dokladu</th>
+        <th style="width:8%">Státní občanství</th>
+        <th style="width:7%">Vybraný poplatek</th>
+        <th style="width:10%">Důvod osvobození / chybějící údaje</th>
+      </tr>
+    </thead>
+    <tbody>
+      <? for (var i = 0; i < entries.length; i++) { var e = entries[i]; ?>
+        <tr class="<?= e.missing ? 'incomplete' : '' ?>">
+          <td><?= e.reservationNumber || '—' ?></td>
+          <td><?= e.from ?></td>
+          <td><?= e.to ?></td>
+          <td><?= e.firstName || '—' ?></td>
+          <td><?= e.lastName || '—' ?></td>
+          <td><?= e.birthDate || '—' ?></td>
+          <td><?= e.address || '—' ?></td>
+          <td><?= e.documentType || '—' ?></td>
+          <td><?= e.documentNumber || '—' ?></td>
+          <td><?= e.citizenship || '—' ?></td>
+          <td class="fee"><?= e.feeAmount ?> Kč</td>
+          <td><? if (e.missing) { ?><span class="missing">Chybí: <?= e.missing ?></span><? } else { ?><?= e.feeExemption || '—' ?><? } ?></td>
+        </tr>
+      <? } ?>
+    </tbody>
+  </table>
+  <p class="foot">PDF bylo sestaveno z rezervací ve stavu „Pobyt ukončen“ s dokončeným online check-inem. Údaje odpovídají záznamům v administraci.</p>
+</body>
+</html>
+

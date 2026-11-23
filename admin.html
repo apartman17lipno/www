@@ -49,7 +49,7 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
   <p class="small" id="loginInfo" style="margin-top:12px" role="status"></p>
 </div>
 <div id="app" hidden>
-<div class="tabs"><button class="tab on" data-tab="t1">Poptávky a rezervace <span id="cnt"></span></button><button class="tab" data-tab="t2">Ceník</button><button class="tab" data-tab="t3">Platební údaje a přístupový kód</button></div>
+<div class="tabs"><button class="tab on" data-tab="t1">Poptávky a rezervace <span id="cnt"></span></button><button class="tab" data-tab="t2">Ceník</button><button class="tab" data-tab="t3">Platební údaje a přístupový kód</button><button class="tab" data-tab="t4">Kniha hostů</button></div>
 
 <section id="t1">
   <div class="panel">
@@ -109,6 +109,19 @@ input,select{font:inherit;color:inherit;background:var(--bg);border:1px solid va
     <div class="acts"><button class="b" id="saveLifecycleSettings">Uložit nastavení</button></div>
   </div>
 </section>
+
+<section id="t4" hidden>
+  <div class="panel">
+    <h2>Generování knihy hostů</h2>
+    <p class="muted small">PDF zahrne pouze skutečně ukončené pobyty se stavem „Pobyt ukončen“ a dokončeným online check-inem. Záznamy jsou řazeny podle začátku pobytu.</p>
+    <div class="row">
+      <label>Od data pobytu<input type="date" id="guestbook-from"></label>
+      <label>Do data pobytu<input type="date" id="guestbook-to"></label>
+      <div><button class="b" id="guestbook-generate" type="button">Vygenerovat PDF</button></div>
+    </div>
+    <p class="muted small">Pokud u hosta chybí některý evidovaný údaj, bude záznam v PDF označen k doplnění. Rozsah období může být nejvýše 6 let.</p>
+  </div>
+</section>
 </div>
 </div>
 <script>
@@ -118,7 +131,7 @@ function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null
 function cz(i){var a=i.split('-');return (+a[2])+'. '+(+a[1])+'. '+a[0];}
 function nights(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:00:00'))/864e5);}
 function noun(n){return n+' '+(n===1?'noc':n<5?'noci':'nocí');}
-var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte data. Odjezd musí být po příjezdu.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v záložce Platební údaje a přístupový kód.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
+var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte zadané období.',range:'Vyberte období nejvýše 6 let.',empty:'Ve vybraném období nejsou žádné ukončené pobyty s dokončeným check-inem.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v záložce Platební údaje a přístupový kód.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
 function toast(t,bad){var m=$('msg');m.textContent=t;m.className='toast '+(bad?'bad':'ok');m.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){m.hidden=true;},6000);}
 var EP='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec',KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
 // Veřejné GET volání přes <script> (jen config a nonce, bez tajných údajů)
@@ -327,6 +340,24 @@ function renderPrices(){
   $('p-def').value=p.defaultPrice;$('p-clean').value=p.cleaning;$('p-pp').value=p.perPersonNight;
 }
 $('saveLifecycleSettings').onclick=function(){call('adminSaveLifecycleSettings',[{accountName:$('l-account-name').value,bankAccount:$('l-bank-account').value,accessCode:$('l-access-code').value}],'Nastavení uloženo.',true);};
+$('guestbook-generate').onclick=function(){
+  var btn=$('guestbook-generate'),from=$('guestbook-from').value,to=$('guestbook-to').value;
+  if(!from||!to||from>to){toast(ERR.dates,true);return;}
+  btn.disabled=true;btn.textContent='Vytvářím PDF…';
+  api('adminGuestbookPdf',[from,to]).then(function(res){
+    if(res&&res.error==='auth')return authFail();
+    if(!res||!res.ok){toast(ERR[res&&res.error]||'PDF se nepodařilo vytvořit.',true);return;}
+    var raw=atob(res.pdf),bytes=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    var url=URL.createObjectURL(new Blob([bytes],{type:'application/pdf'})),a=document.createElement('a');
+    a.href=url;a.download=res.fileName||'evidencni-kniha-hostu.pdf';document.body.appendChild(a);a.click();a.remove();
+    setTimeout(function(){URL.revokeObjectURL(url);},1000);
+    toast('PDF obsahuje '+res.entries+' hostů.'+(res.incompleteGuests?' Chybějící údaje označeno u '+res.incompleteGuests+' hostů.':''),!!res.incompleteGuests);
+  }).catch(function(){toast('Spojení se skriptem selhalo.',true);})
+    .then(function(){btn.disabled=false;btn.textContent='Vygenerovat PDF';});
+};
+function localIso(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+$('guestbook-to').value=localIso(new Date());
+var guestbookFrom=new Date();guestbookFrom.setFullYear(guestbookFrom.getFullYear()-1);$('guestbook-from').value=localIso(guestbookFrom);
 $('addRule').onclick=function(){$('rules').appendChild(ruleRow({}));};
 $('savePrices').onclick=function(){
   var rules=[],bad=false;
@@ -352,3 +383,4 @@ if(getSess()){show(true);load(false);}else show(false);
 </script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body></html>
+
