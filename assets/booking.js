@@ -114,7 +114,7 @@
     h+='<div class="r"><span>Hosté</span><b>'+people+'</b></div>';
     h+='<div class="r"><span>Místní poplatek '+kc(PRICES.perPersonNight)+' × '+adults+' dospělých × '+n+' '+(n===1?'noc':(n<5?'noci':'nocí'))+'</span><b>'+kc(fee)+'</b></div>';
     h+='<div class="r"><span>Místní poplatek za děti</span><b>0 Kč</b></div>';
-    h+='<div class="r tot"><span>Cena za pobyt</span><b>'+kc(total)+'</b></div><small>Orientační nabídka. Děti jsou od místního poplatku osvobozeny; konečnou cenu potvrdíme e-mailem. Po schválení rezervace se hradí záloha 50 % z ceny ubytování bez úklidu a místního poplatku. Doplatek je splatný 14 dní před příjezdem; při rezervaci méně než 14 dní před příjezdem se hradí celá částka.</small>';
+    h+='<div class="r tot"><span>Cena za pobyt</span><b>'+kc(total)+'</b></div><small>Orientační nabídka. Děti jsou od místního poplatku osvobozeny; konečnou cenu potvrdíme e-mailem. Po schválení rezervace se hradí záloha 50 % z ceny ubytování bez úklidu a místního poplatku. Doplatek je splatný 14 dní před příjezdem; při rezervaci méně než 14 dní před příjezdem se hradí celá částka. <a href="rezervacni-a-storno-podminky.html">Podrobné podmínky rezervace a storna</a>.</small>';
     box.innerHTML=h; lastPrice=kc(total);
   }
   function sync(){fromEl.value=selFrom;toEl.value=selTo;updatePrice();}
