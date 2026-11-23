@@ -55,7 +55,7 @@
           <td><?= e.documentNumber || '—' ?></td>
           <td><?= e.citizenship || '—' ?></td>
           <td class="fee"><?= e.feeAmount ?> Kč</td>
-          <td><? if (e.missing) { ?><span class="missing">Chybí: <?= e.missing ?></span><? } else { ?><?= e.feeExemption || '—' ?><? } ?></td>
+          <td><?= e.feeExemption || '—' ?><? if (e.missing) { ?><br><span class="missing">Chybí: <?= e.missing ?></span><? } ?></td>
         </tr>
       <? } ?>
     </tbody>
