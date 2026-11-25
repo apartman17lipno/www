@@ -151,8 +151,9 @@
     if(!selFrom||!selTo){box.textContent='Vyberte prosím v kalendáři příjezd a odjezd.';return;}
     var adults=parseInt(document.getElementById('f-adults').value,10)||1;
     var children=parseInt(document.getElementById('f-children').value,10)||0;
+    var webEl=document.getElementById('f-web');
     var data={email:document.getElementById('f-mail').value,from:selFrom,to:selTo,
-      adults:adults,children:children,guests:adults+children,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:''};
+      adults:adults,children:children,guests:adults+children,message:document.getElementById('f-msg').value,cot:document.getElementById('f-cot').checked,chair:document.getElementById('f-chair').checked,price:lastPrice,web:webEl?webEl.value:''};
     btn.disabled=true;btn.textContent='Odesílám…';box.textContent='';
     fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'submit',data:data})}).then(function(r){return r.json();})
     .then(function(j){

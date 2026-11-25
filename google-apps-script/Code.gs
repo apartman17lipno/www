@@ -235,7 +235,7 @@ function nextReservationNumber_() {
   return day + ('0000' + sequence).slice(-4);
 }
 function ensureReservationNumber_(ev, meta) {
-  if (!/^\\d{10}$/.test(String(meta.reservationNumber || ''))) {
+  if (!/^\d{10}$/.test(String(meta.reservationNumber || ''))) {
     meta.reservationNumber = nextReservationNumber_();
     saveReservationMeta_(ev, meta);
   }
@@ -585,11 +585,6 @@ function adminReject_(id, sendMail, actor) {
     ev.setTitle('Zamítnutá: ' + (meta.email || 'rezervace')); ev.setColor(CalendarApp.EventColor.GRAY);
     saveReservationMeta_(ev, meta); return { ok: true };
   } finally { lock.releaseLock(); }
-}
-
-function findInquiry_(id) {
-  var ev = getCal().getEventById(String(id || ''));
-  return ev && ev.getTitle().indexOf('Poptávka') === 0 ? ev : null;
 }
 
 function adminDelete_(id) {
