@@ -234,6 +234,11 @@ function setTestCalendarId(id) {
 function setTestAdminPage(url) {
   PropertiesService.getScriptProperties().setProperty('ADMIN_PAGE', String(url || '').trim());
 }
+function runOnceSetup() {
+  setTestCalendarId('0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com');
+  setTestAdminPage('https://apartman17lipno.github.io/www-test/admin.html');
+  console.log('Testovací prostředí nastaveno: CALENDAR_ID a ADMIN_PAGE uloženy do ScriptProperties.');
+}
 
 // Variabilní symbol je 10místné číselné číslo rezervace (YYMMDD + denní pořadí).
 // Volá se z operací, které již drží ScriptLock.
