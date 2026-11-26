@@ -7,9 +7,13 @@
 
 // ================= Nastavení =================
 var OWNER = 'apartman17lipno@gmail.com';
+var PROD_CALENDAR_ID = 'apartman17lipno@gmail.com';
+var TEST_CALENDAR_ID = '0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com';
+var TEST_DEPLOYMENT_ID = 'AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA';
 var ADMINS = ['apartman17lipno@gmail.com', 'miloslav.filip@gmail.com', 'mona.viskova@gmail.com'];  // jen tyto účty smějí do administrace
 var NOTIFY = ['apartman17lipno@gmail.com'];                         // kdo dostává e-maily o nových poptávkách
 var ADMIN_PAGE = 'https://apartman17lipno.cz/admin.html';
+var TEST_ADMIN_PAGE = 'https://apartman17lipno.github.io/www-test/admin.html';
 var GOOGLE_CLIENT_ID = '478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';  // OAuth Client ID (není tajný)
 var SESSION_TTL_MS = 12 * 3600 * 1000;   // platnost relace: 12 hodin
 var MAX_SESSIONS = 25;                   // nejvýš tolik současných relací
@@ -214,30 +218,40 @@ function adminCall_(d) {
   return funcs[name].apply(null, args);
 }
 
-// ================= Kalendář =================
+// ================= Kalendář a prostředí =================
+function isTestEnvironment_() {
+  var url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  if (url.indexOf(TEST_DEPLOYMENT_ID) >= 0) return true;
+  return PropertiesService.getScriptProperties().getProperty('ENV') === 'TEST';
+}
+
 function getAdminPage_() {
-  return PropertiesService.getScriptProperties().getProperty('ADMIN_PAGE') || ADMIN_PAGE;
+  return isTestEnvironment_() ? TEST_ADMIN_PAGE : (PropertiesService.getScriptProperties().getProperty('ADMIN_PAGE') || ADMIN_PAGE);
 }
 
 function getCal() {
-  var customCal = PropertiesService.getScriptProperties().getProperty('CALENDAR_ID');
-  var calId = customCal || OWNER;
+  var isTest = isTestEnvironment_();
+  var calId = isTest ? TEST_CALENDAR_ID : PROD_CALENDAR_ID;
+
+  // Bezpečnostní zámek (Fail-Safe): Testovací prostředí nesmí nikdy sáhnout na produkční kalendář
+  if (isTest && calId === PROD_CALENDAR_ID) {
+    throw new Error('KRITICKÁ BEZPEČNOSTNÍ CHYBA: Pokus o přístup k produkčnímu kalendáři z testovacího prostředí!');
+  }
+
   var cal = CalendarApp.getCalendarById(calId);
   if (!cal) throw new Error('Kalendář ' + calId + ' nebyl nalezen.');
   return cal;
 }
 
-// Pomocné funkce pro jednorázové nastavení v testovacím Google Apps Script projektu:
-function setTestCalendarId(id) {
-  PropertiesService.getScriptProperties().setProperty('CALENDAR_ID', String(id || '').trim());
+// Pomocné funkce pro explicitní nastavení prostředí v editoru Apps Scriptu:
+function setEnvironmentTest() {
+  PropertiesService.getScriptProperties().setProperty('ENV', 'TEST');
+  console.log('Prostředí nastaveno na: TEST (kalendář: ' + TEST_CALENDAR_ID + ')');
 }
-function setTestAdminPage(url) {
-  PropertiesService.getScriptProperties().setProperty('ADMIN_PAGE', String(url || '').trim());
-}
-function runOnceSetup() {
-  setTestCalendarId('0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com');
-  setTestAdminPage('https://apartman17lipno.github.io/www-test/admin.html');
-  console.log('Testovací prostředí nastaveno: CALENDAR_ID a ADMIN_PAGE uloženy do ScriptProperties.');
+function setEnvironmentProd() {
+  PropertiesService.getScriptProperties().setProperty('ENV', 'PROD');
+  console.log('Prostředí nastaveno na: PROD (kalendář: ' + PROD_CALENDAR_ID + ')');
 }
 
 // Variabilní symbol je 10místné číselné číslo rezervace (YYMMDD + denní pořadí).
