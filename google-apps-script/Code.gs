@@ -7,9 +7,10 @@
 
 // ================= Nastavení =================
 var OWNER = 'apartman17lipno@gmail.com';
+var CALENDAR_ID = '0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com';  // Testovací kalendář
 var ADMINS = ['apartman17lipno@gmail.com', 'miloslav.filip@gmail.com', 'mona.viskova@gmail.com'];  // jen tyto účty smějí do administrace
 var NOTIFY = ['apartman17lipno@gmail.com'];                         // kdo dostává e-maily o nových poptávkách
-var ADMIN_PAGE = 'https://apartman17lipno.cz/admin.html';
+var ADMIN_PAGE = 'https://apartman17lipno.github.io/www-test/admin.html';
 var GOOGLE_CLIENT_ID = '478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';  // OAuth Client ID (není tajný)
 var SESSION_TTL_MS = 12 * 3600 * 1000;   // platnost relace: 12 hodin
 var MAX_SESSIONS = 25;                   // nejvýš tolik současných relací
@@ -216,8 +217,8 @@ function adminCall_(d) {
 
 // ================= Kalendář =================
 function getCal() {
-  var cal = CalendarApp.getCalendarById(OWNER);
-  if (!cal) throw new Error('Kalendář ' + OWNER + ' nebyl nalezen.');
+  var cal = CalendarApp.getCalendarById(CALENDAR_ID);
+  if (!cal) throw new Error('Kalendář ' + CALENDAR_ID + ' nebyl nalezen.');
   return cal;
 }
 

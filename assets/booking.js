@@ -1,5 +1,5 @@
 (function(){
-  var ENDPOINT='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec';
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA/exec';
   // Komunikace se skriptem přes element script (obchází omezení CORS u Google Apps Script)
   function jsonp(params){
     return new Promise(function(resolve,reject){
