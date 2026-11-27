@@ -1,0 +1,29 @@
+name: Mirror DEVELOP to TEST
+
+on:
+  push:
+    branches: [DEVELOP]
+
+concurrency:
+  group: mirror-test
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push DEVELOP to www-test main
+        env:
+          DEPLOY_KEY: ${{ secrets.TEST_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git remote add test git@github.com:apartman17lipno/www-test.git
+          # www-test is only a mirror of DEVELOP, so the push overwrites its main.
+          git push --force test HEAD:refs/heads/main
