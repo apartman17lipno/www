@@ -920,12 +920,33 @@ function createPaymentQr_(account, amount, variableSymbol) {
     }
     if (prefix === '0') prefix = '';
     if (number === '0' || !number || !bank || !isFinite(amount) || Number(amount) <= 0) return null;
-    var params = { accountPrefix: prefix, accountNumber: number, bankCode: bank, amount: Number(amount).toFixed(2), currency: 'CZK', vs: String(variableSymbol || '').replace(/\D/g, '').slice(0, 10), message: 'Rezervace ' + String(variableSymbol || ''), size: '220' };
+    var vs = String(variableSymbol || '').replace(/\D/g, '').slice(0, 10);
+    var params = {
+      accountNumber: number,
+      bankCode: bank,
+      amount: Number(amount).toFixed(2),
+      currency: 'CZK',
+      message: vs ? ('Rezervace ' + vs) : 'Rezervace',
+      size: '220'
+    };
+    if (prefix) params.accountPrefix = prefix;
+    if (vs) params.vs = vs;
     var query = Object.keys(params).map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
     var response = UrlFetchApp.fetch('https://api.paylibo.com/paylibo/generator/czech/image?' + query, { muteHttpExceptions: true });
-    if (response.getResponseCode() !== 200 || !/^image\/png/i.test(response.getHeaders()['Content-Type'] || '')) return null;
+    var headers = response.getHeaders() || {};
+    var contentType = '';
+    Object.keys(headers).forEach(function(k) {
+      if (String(k).toLowerCase() === 'content-type') contentType = String(headers[k] || '');
+    });
+    if (response.getResponseCode() !== 200 || !/^image\/png/i.test(contentType)) {
+      console.warn('QR platba nebyla vygenerována:', response.getResponseCode(), contentType);
+      return null;
+    }
     return response.getBlob().setName('qr-platba.png');
-  } catch (err) { return null; }
+  } catch (err) {
+    console.warn('Chyba při generování QR platby:', err);
+    return null;
+  }
 }
 
 function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
