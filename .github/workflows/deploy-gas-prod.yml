@@ -1,0 +1,64 @@
+name: Deploy GAS to PROD
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'google-apps-script/**'
+      - '.github/workflows/deploy-gas-prod.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-gas-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: google-apps-script
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.GAS_PROD_SCRIPT_ID }}
+          DEPLOYMENT_ID: ${{ secrets.GAS_PROD_DEPLOYMENT_ID }}
+        run: |
+          missing=0
+          for var in CLASPRC_JSON SCRIPT_ID DEPLOYMENT_ID; do
+            if [ -z "${!var}" ]; then
+              echo "::error::Missing required GitHub secret for $var"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp
+        run: npm install --no-save @google/clasp
+
+      - name: Configure clasp credentials and project
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          SCRIPT_ID: ${{ secrets.GAS_PROD_SCRIPT_ID }}
+        run: |
+          printf '%s\n' "$CLASPRC_JSON" > ~/.clasprc.json
+          chmod 600 ~/.clasprc.json
+          printf '{"scriptId":"%s","rootDir":"."}\n' "$SCRIPT_ID" > .clasp.json
+
+      - name: Push code and update PROD deployment
+        env:
+          DEPLOYMENT_ID: ${{ secrets.GAS_PROD_DEPLOYMENT_ID }}
+        run: |
+          npx clasp push --force
+          npx clasp deploy --deploymentId "$DEPLOYMENT_ID" --description "PROD (${GITHUB_SHA::7})"
+
+      - name: Cleanup credentials
+        if: always()
+        run: rm -f ~/.clasprc.json .clasp.json

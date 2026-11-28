@@ -24,11 +24,11 @@ TEST a PROD používají stejný kód. Liší se výběrem backendu, kalendáře
 
 ## Postup změn (DEVELOP → TEST → PROD)
 
-1. Práce probíhá ve větvi `DEVELOP` (`git switch DEVELOP`, `git pull --rebase origin DEVELOP`). Pravidla pro AI nástroje (automatický pull a push do `DEVELOP`, zákaz pushe do `main` a zákaz `--force`) jsou v `AGENTS.md`.
+1. Práce probíhá ve větvi `DEVELOP` (`git switch DEVELOP`, `git pull --rebase origin DEVELOP`). Pravidla pro AI nástroje (automatický pull a push do `DEVELOP`, zákaz pushe/merge do `main` a zákaz `--force`) jsou v `AGENTS.md`.
 2. Každý push do `DEVELOP` spustí GitHub Actions workflow `.github/workflows/mirror-test.yml` („Mirror DEVELOP to TEST"). Ten zkopíruje obsah do větve `main` repozitáře `www-test` (force push, repozitář je jen zrcadlo) a v kopii před tím odstraní soubor `CNAME`, aby TEST nezabíral ostrou doménu. Větev `DEVELOP` v `www` se tím nemění.
-3. Změnu ověřte na testovacím webu.
-4. Po ověření vytvořte pull request z `DEVELOP` do `main` a sloučte ho. Tím se změna dostane do ostrého webu.
-5. Změny v `Code.gs` se do Apps Scriptu nenasazují automaticky; viz sekce Google Apps Script.
+3. Pokud push do `DEVELOP` mění soubory ve složce `google-apps-script/**`, spustí se workflow `.github/workflows/deploy-gas-test.yml` („Deploy GAS to TEST"), které přes `clasp` nahraje kód do TEST projektu Apps Scriptu a aktualizuje testovací nasazení webové aplikace.
+4. Změnu ověřte na testovacím webu.
+5. Po ověření vytvořte pull request z `DEVELOP` do `main` a ručně ho slučte. Tím se změna dostane do ostrého webu; pokud byly součástí změny ve složce `google-apps-script/**`, spustí se `.github/workflows/deploy-gas-prod.yml` („Deploy GAS to PROD") a aktualizuje ostré nasazení Apps Scriptu.
 
 ### Nastavení zrcadlení
 
@@ -44,8 +44,15 @@ TEST a PROD používají stejný kód. Liší se výběrem backendu, kalendáře
 - Nasazená webová aplikace TEST: [otevřít Apps Script endpoint](https://script.google.com/macros/s/AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA/exec)
 - Přihlášení do administrace je povolené účtům `apartman17lipno@gmail.com`, `miloslav.filip@gmail.com` a `mona.viskova@gmail.com` (v obou prostředích).
 - `Code.gs` obsluhuje veřejné požadavky na ceny, obsazenost a poptávky; administraci přes Google přihlášení, rezervace/blokace kalendáře, životní cyklus rezervace (platby, online check-in, automatické e-maily), knihu hostů a ukládání ceníku.
-- Kopie zdrojového souboru v GitHubu: [`google-apps-script/Code.gs`](https://github.com/apartman17lipno/www/blob/main/google-apps-script/Code.gs).
-- Po změně skriptu (v každém ze dvou projektů zvlášť): vložte aktuální `Code.gs` (a případně `checkin.html`, `guestbook.html`) do projektu, spusťte `authorize()` a schvalte oprávnění. Pak v **Nasadit → Spravovat nasazení → Upravit** vyberte **Nová verze → Nasadit**. Upravujte stávající nasazení, aby zůstala stejná URL.
+- Kopie zdrojových souborů v GitHubu: `google-apps-script/` (`Code.gs`, `checkin.html`, `guestbook.html`, `appsscript.json`).
+- Automatické nasazení přes GitHub Actions (`clasp`):
+  - TEST: `.github/workflows/deploy-gas-test.yml` (při pushi do `DEVELOP` se změnou `google-apps-script/**` nebo ručně).
+  - PROD: `.github/workflows/deploy-gas-prod.yml` (při pushi/merge do `main` se změnou `google-apps-script/**` nebo ručně).
+  - Potřebné GitHub Secrets v repozitáři `www`:
+    - `CLASPRC_JSON`: obsah `~/.clasprc.json` z příkazu `npx @google/clasp login` na účtu `apartman17lipno@gmail.com` (v nastavení Apps Scriptu musí být zapnuté Google Apps Script API).
+    - `GAS_TEST_SCRIPT_ID` a `GAS_TEST_DEPLOYMENT_ID` (ID testovacího projektu a jeho nasazení `AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA`).
+    - `GAS_PROD_SCRIPT_ID` a `GAS_PROD_DEPLOYMENT_ID` (ID produkčního projektu a jeho nasazení `AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A`).
+- Ruční postup (záložní): vložte aktuální `Code.gs` (a případně `checkin.html`, `guestbook.html`) do projektu, spusťte `authorize()` a schvalte oprávnění. Pak v **Nasadit → Spravovat nasazení → Upravit** vyberte **Nová verze → Nasadit**. Upravujte stávající nasazení, aby zůstala stejná URL.
 - Stav z posledního ověření: přihlašovací tlačítko Google se zobrazovalo, ale server hlásil, že se token nepodařilo ověřit. Po nasazení nové verze přihlášení znovu ověřte.
 
 ### Jak se rozlišuje prostředí
