@@ -27,7 +27,7 @@ jobs:
             git commit -q -m "TEST: remove CNAME"
           fi
 
-      - name: Push DEVELOP to www-test main
+      - name: Push DEVELOP to www-test main (excluding PROD-only workflows)
         env:
           DEPLOY_KEY: ${{ secrets.TEST_DEPLOY_KEY }}
         run: |
@@ -36,5 +36,11 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan github.com >> ~/.ssh/known_hosts
           git remote add test git@github.com:apartman17lipno/www-test.git
-          # www-test is only a mirror of DEVELOP, so the push overwrites its main.
-          git push --force test HEAD:refs/heads/main
+          # Build a TEST-only main from DEVELOP, excluding PROD-only GAS deploy workflow
+          git checkout -b mirror-main
+          if [ -f .github/workflows/deploy-gas-prod.yml ]; then
+            git rm -q .github/workflows/deploy-gas-prod.yml
+            git commit -q -m "TEST: exclude PROD GAS deploy workflow"
+          fi
+          # www-test is only a mirror of DEVELOP (minus PROD-only files), so overwrite its main.
+          git push --force test mirror-main:refs/heads/main
