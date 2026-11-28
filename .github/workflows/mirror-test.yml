@@ -1,0 +1,46 @@
+name: Mirror DEVELOP to TEST
+
+on:
+  push:
+    branches: [DEVELOP]
+
+concurrency:
+  group: mirror-test
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove CNAME for TEST
+        # The TEST site must not claim the production domain.
+        # The commit exists only on this runner; DEVELOP in www is not changed.
+        run: |
+          if [ -f CNAME ]; then
+            git config user.name "mirror-bot"
+            git config user.email "mirror-bot@users.noreply.github.com"
+            git rm -q CNAME
+            git commit -q -m "TEST: remove CNAME"
+          fi
+
+      - name: Push DEVELOP to www-test main (excluding PROD-only workflows)
+        env:
+          DEPLOY_KEY: ${{ secrets.TEST_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          git remote add test git@github.com:apartman17lipno/www-test.git
+          # Build a TEST-only main from DEVELOP, excluding PROD-only GAS deploy workflow
+          git checkout -b mirror-main
+          if [ -f .github/workflows/deploy-gas-prod.yml ]; then
+            git rm -q .github/workflows/deploy-gas-prod.yml
+            git commit -q -m "TEST: exclude PROD GAS deploy workflow"
+          fi
+          # www-test is only a mirror of DEVELOP (minus PROD-only files), so overwrite its main.
+          git push --force test mirror-main:refs/heads/main

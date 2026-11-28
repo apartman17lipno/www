@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Online check-in – Costa Plana</title>
+<style>
+:root{font:16px/1.5 system-ui,sans-serif;color:#12323b;background:#f3f6f4}
+*{box-sizing:border-box}body{margin:0;padding:24px}.wrap{max-width:720px;margin:0 auto}
+.card{background:#fff;border:1px solid #d3dedc;border-radius:14px;padding:24px;margin:24px 0}
+h1{font-size:1.5rem;margin:0 0 8px}h2{font-size:1.15rem;margin:0 0 16px}
+p{color:#4f6a70}.guest{padding:16px 0;border-top:1px solid #d3dedc}
+label{display:grid;gap:5px;margin:10px 0;font-size:.92rem}input,select{font:inherit;padding:10px;border:1px solid #b9c9c7;border-radius:8px}
+button{font:inherit;border:0;border-radius:999px;padding:12px 20px;background:#1f6f78;color:white;cursor:pointer}
+button:disabled{opacity:.6}.copy-address{margin-top:6px;padding:7px 12px;background:#edf4f2;color:#1f5960;border:1px solid #b9c9c7;font-size:.88rem}#status{margin-top:16px}.error{color:#9b291e}.success{color:#146638}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}@media(max-width:600px){body{padding:12px}.card{padding:18px}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main class="wrap"><section class="card">
+<h1 id="title">Online check-in</h1>
+<p id="hostCount">Načítám údaje o rezervaci…</p>
+<form id="form" hidden><div id="guests"></div><button id="send" type="submit">Dokončit check-in</button></form>
+<p id="status" role="status"></p>
+</section></main>
+<script>
+(function(){
+  var PROD_ENDPOINT='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec';
+  var TEST_ENDPOINT='https://script.google.com/macros/s/AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA/exec';
+  var isProd=window.location.hostname==='apartman17lipno.cz'||window.location.hostname==='www.apartman17lipno.cz';
+  var ENDPOINT=isProd?PROD_ENDPOINT:TEST_ENDPOINT;
+  var MAIL='apartman17lipno@gmail.com';
+  var params=new URLSearchParams(window.location.search);
+  var ID=params.get('id')||'', TOKEN=params.get('token')||'';
+  var titleEl=document.getElementById('title'), infoEl=document.getElementById('hostCount'),
+      statusEl=document.getElementById('status'), form=document.getElementById('form'),
+      box=document.getElementById('guests'), button=document.getElementById('send');
+
+  // Komunikace se skriptem přes POST (token zůstává v těle požadavku, ne v adrese skriptu)
+  function post(body){
+    return fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body)})
+      .then(function(r){return r.json();});
+  }
+  function showError(title,text){
+    titleEl.textContent=title;infoEl.textContent=text;form.hidden=true;
+    statusEl.className='error';
+    statusEl.textContent='Kontakt: '+MAIL;
+  }
+
+  function buildForm(info){
+    var adults=info.adults, count=info.adults+info.children;
+    var label=count===1?'1 ubytovanou osobu':(count<=4?count+' ubytované osoby':count+' ubytovaných osob');
+    infoEl.textContent='Stav: online check-in čeká na dokončení. Vyplňte prosím údaje za '+label+'. Údaje slouží k evidenci hostů a místního poplatku.';
+    for(var i=0;i<count;i++){
+      var category=i<adults?'dospělý host':'dítě';
+      var section=document.createElement('section');section.className='guest';
+      var title=document.createElement('h2');title.textContent='Host '+(i+1)+' – '+category;section.appendChild(title);
+      var fields=[['firstName','Jméno','text'],['lastName','Příjmení','text'],['birthDate','Datum narození','date'],['address','Adresa trvalého pobytu nebo obdobná adresa v zahraničí','text'],['documentType','Druh dokladu totožnosti','select'],['documentNumber','Číslo dokladu','text'],['citizenship','Občanství','text']];
+      var grid=document.createElement('div');grid.className='grid';
+      fields.forEach(function(item){
+        var lab=document.createElement('label');lab.textContent=item[1];var input;
+        if(item[2]==='select'){
+          input=document.createElement('select');
+          [['','Vyberte doklad'],['Občanský průkaz','Občanský průkaz'],['Cestovní pas','Cestovní pas'],['Pobytový průkaz','Pobytový průkaz'],['Jiný doklad','Jiný doklad']].forEach(function(o){
+            var opt=document.createElement('option');opt.value=o[0];opt.textContent=o[1];input.appendChild(opt);
+          });
+        }else{input=document.createElement('input');input.type=item[2];}
+        input.name=item[0];
+        if(item[0]==='citizenship'){input.setAttribute('autocomplete','off');input.value='ČR';}
+        var optionalChildDocument=(i>=adults)&&(item[0]==='documentType'||item[0]==='documentNumber');
+        input.required=!optionalChildDocument;
+        if(optionalChildDocument)lab.appendChild(document.createTextNode(' (nepovinné)'));
+        if(item[0]==='documentNumber')input.maxLength=80;
+        if(item[0]==='address')input.maxLength=250;
+        lab.appendChild(input);
+        if(item[0]==='address'&&i>0){
+          var copy=document.createElement('button');copy.type='button';copy.className='copy-address';copy.textContent='Použít adresu hlavní osoby';
+          copy.addEventListener('click',function(){var first=box.querySelector('.guest input[name="address"]');if(first)input.value=first.value;});
+          lab.appendChild(copy);
+        }
+        grid.appendChild(lab);
+      });
+      section.appendChild(grid);box.appendChild(section);
+    }
+    form.hidden=false;
+    infoEl.hidden=false;
+  }
+
+  form.addEventListener('submit',function(event){
+    event.preventDefault();
+    var entries=Array.prototype.map.call(box.querySelectorAll('.guest'),function(section){
+      var obj={};Array.prototype.forEach.call(section.querySelectorAll('input,select'),function(input){obj[input.name]=input.value;});return obj;
+    });
+    button.disabled=true;statusEl.className='';statusEl.textContent='Odesílám údaje…';
+    post({action:'checkin',id:ID,token:TOKEN,guests:entries}).then(function(result){
+      if(result&&result.ok){
+        form.hidden=true;
+        titleEl.textContent='Online check-in byl dokončen';
+        infoEl.textContent='Online check-in byl dokončen.';
+        statusEl.className='success';
+        statusEl.textContent=result.warning?'E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Potvrzení s přístupovým kódem vám přijde e-mailem.';
+        return;
+      }
+      button.disabled=false;statusEl.className='error';
+      var e=result&&result.error;
+      statusEl.textContent=e==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':
+        e==='token'?'Odkaz již není platný (mohl být použit nebo vypršel). Kontaktujte nás prosím e-mailem '+MAIL+'.':
+        'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';
+    }).catch(function(){
+      button.disabled=false;statusEl.className='error';statusEl.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.';
+    });
+  });
+
+  if(!ID||!TOKEN){
+    showError('Odkaz není platný','Odkaz je neúplný. Použijte prosím celý odkaz z e-mailu, nebo nás kontaktujte.');
+    return;
+  }
+  post({action:'checkininfo',id:ID,token:TOKEN}).then(function(info){
+    if(info&&info.ok)buildForm(info);
+    else showError('Odkaz není platný',info&&info.error==='guests'?'Počet hostů v rezervaci nelze ověřit. Kontaktujte nás prosím e-mailem.':'Odkaz mohl být již použit nebo jeho platnost vypršela. Kontaktujte nás prosím e-mailem.');
+  }).catch(function(){
+    showError('Spojení se nepodařilo','Údaje o rezervaci se nepodařilo načíst. Zkuste to prosím znovu za chvíli.');
+  });
+})();
+</script></body></html>

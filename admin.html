@@ -133,7 +133,10 @@ function nights(a,b){return Math.round((new Date(b+'T00:00:00')-new Date(a+'T00:
 function noun(n){return n+' '+(n===1?'noc':n<5?'noci':'nocí');}
 var ERR={busy:'Termín se překrývá s jinou událostí v kalendáři.',dates:'Zkontrolujte zadané období.',range:'Vyberte období nejvýše 6 let.',empty:'Ve vybraném období nejsou žádné ukončené pobyty s dokončeným check-inem.',invalid:'Zkontrolujte částky a zadané údaje.',amount:'Částka musí být kladná a nesmí přesáhnout zbývající cenu.',settings:'Nejdřív uložte bankovní účet a přístupový kód v záložce Platební údaje a přístupový kód.',legacy:'U starší poptávky nejdřív doplňte cenový rozpis.',state:'Tuto akci nelze provést v aktuálním stavu rezervace.',already:'Automatická výzva už byla odeslána.',managed:'Rezervaci nelze smazat; použijte storno, aby zůstala zachována historie.',notfound:'Událost už neexistuje, seznam se obnoví.'};
 function toast(t,bad){var m=$('msg');m.textContent=t;m.className='toast '+(bad?'bad':'ok');m.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){m.hidden=true;},6000);}
-var EP='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec',KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
+var PROD_EP='https://script.google.com/macros/s/AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A/exec';
+var TEST_EP='https://script.google.com/macros/s/AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA/exec';
+var isProd=window.location.hostname==='apartman17lipno.cz'||window.location.hostname==='www.apartman17lipno.cz';
+var EP=isProd?PROD_EP:TEST_EP,KEY='cp_admin_session',CLIENT_ID='478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';
 // Veřejné GET volání přes <script> (jen config a nonce, bez tajných údajů)
 function jsonp(params){
   return new Promise(function(resolve,reject){

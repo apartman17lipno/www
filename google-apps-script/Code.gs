@@ -7,9 +7,15 @@
 
 // ================= Nastavení =================
 var OWNER = 'apartman17lipno@gmail.com';
+var PROD_CALENDAR_ID = 'apartman17lipno@gmail.com';
+var TEST_CALENDAR_ID = '0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com';
+var TEST_DEPLOYMENT_ID = 'AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA';
 var ADMINS = ['apartman17lipno@gmail.com', 'miloslav.filip@gmail.com', 'mona.viskova@gmail.com'];  // jen tyto účty smějí do administrace
 var NOTIFY = ['apartman17lipno@gmail.com'];                         // kdo dostává e-maily o nových poptávkách
 var ADMIN_PAGE = 'https://apartman17lipno.cz/admin.html';
+var TEST_ADMIN_PAGE = 'https://apartman17lipno.github.io/www-test/admin.html';
+var CHECKIN_PAGE = 'https://apartman17lipno.cz/checkin.html';   // statická check-in stránka na webu (PROD)
+var TEST_CHECKIN_PAGE = 'https://apartman17lipno.github.io/www-test/checkin.html';   // totéž pro TEST
 var GOOGLE_CLIENT_ID = '478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';  // OAuth Client ID (není tajný)
 var SESSION_TTL_MS = 12 * 3600 * 1000;   // platnost relace: 12 hodin
 var MAX_SESSIONS = 25;                   // nejvýš tolik současných relací
@@ -34,7 +40,7 @@ var DEFAULT_PRICES = {   // výchozí ceník; po prvním uložení v administrac
 function doGet(e) {
   var p = (e && e.parameter) || {};
   if (p.action === 'checkin') return checkinPage_(p.id, p.token);
-  if (!p.action) return infoPage('Costa Plana', 'Administrace je na adrese ' + ADMIN_PAGE, ADMIN_PAGE, 'Otevřít administraci');
+  if (!p.action) return infoPage('Costa Plana', 'Administrace je na adrese ' + getAdminPage_(), getAdminPage_(), 'Otevřít administraci');
   var result;
   try {
     switch (p.action) {
@@ -58,6 +64,7 @@ function doPost(e) {
       case 'submit': result = handleSubmit(d.data || d); break;
       case 'login':  result = login_(d.credential); break;
       case 'logout': result = logout_(d.s); break;
+      case 'checkininfo': result = checkinInfo_(d.id, d.token); break;
       case 'checkin': result = completeCheckin_(d.id, d.token, d.guests); break;
       case 'admin':  result = adminCall_(d); break;
       default:       result = { ok: false, error: 'action' };
@@ -214,11 +221,53 @@ function adminCall_(d) {
   return funcs[name].apply(null, args);
 }
 
-// ================= Kalendář =================
+// ================= Kalendář a prostředí =================
+function isTestEnvironment_() {
+  var url = '';
+  try { url = ScriptApp.getService().getUrl() || ''; } catch (e) {}
+  if (url.indexOf(TEST_DEPLOYMENT_ID) >= 0) return true;
+  return PropertiesService.getScriptProperties().getProperty('ENV') === 'TEST';
+}
+
+function getAdminPage_() {
+  return isTestEnvironment_() ? TEST_ADMIN_PAGE : (PropertiesService.getScriptProperties().getProperty('ADMIN_PAGE') || ADMIN_PAGE);
+}
+
+function getCheckinPage_() {
+  return isTestEnvironment_() ? TEST_CHECKIN_PAGE : CHECKIN_PAGE;
+}
+// Odkaz na check-in vede na statickou stránku webu (ne na script.google.com, kde přihlášený
+// uživatel s více Google účty dostává 404). Starší uložené odkazy se převedou na nový tvar;
+// id i token se přebírají beze změny, takže už vydané tokeny zůstávají platné.
+function webCheckinUrl_(storedUrl) {
+  var url = String(storedUrl || ''), base = getCheckinPage_();
+  if (url.indexOf(base + '?') === 0) return url;
+  var id = /[?&]id=([^&]+)/.exec(url), token = /[?&]token=([^&]+)/.exec(url);
+  return id && token ? base + '?id=' + id[1] + '&token=' + token[1] : url;
+}
+
 function getCal() {
-  var cal = CalendarApp.getCalendarById(OWNER);
-  if (!cal) throw new Error('Kalendář ' + OWNER + ' nebyl nalezen.');
+  var isTest = isTestEnvironment_();
+  var calId = isTest ? TEST_CALENDAR_ID : PROD_CALENDAR_ID;
+
+  // Bezpečnostní zámek (Fail-Safe): Testovací prostředí nesmí nikdy sáhnout na produkční kalendář
+  if (isTest && calId === PROD_CALENDAR_ID) {
+    throw new Error('KRITICKÁ BEZPEČNOSTNÍ CHYBA: Pokus o přístup k produkčnímu kalendáři z testovacího prostředí!');
+  }
+
+  var cal = CalendarApp.getCalendarById(calId);
+  if (!cal) throw new Error('Kalendář ' + calId + ' nebyl nalezen.');
   return cal;
+}
+
+// Pomocné funkce pro explicitní nastavení prostředí v editoru Apps Scriptu:
+function setEnvironmentTest() {
+  PropertiesService.getScriptProperties().setProperty('ENV', 'TEST');
+  console.log('Prostředí nastaveno na: TEST (kalendář: ' + TEST_CALENDAR_ID + ')');
+}
+function setEnvironmentProd() {
+  PropertiesService.getScriptProperties().setProperty('ENV', 'PROD');
+  console.log('Prostředí nastaveno na: PROD (kalendář: ' + PROD_CALENDAR_ID + ')');
 }
 
 // Variabilní symbol je 10místné číselné číslo rezervace (YYMMDD + denní pořadí).
@@ -282,7 +331,7 @@ function handleSubmit(d) {
         '\nHosté: ' + guests + '\nPro děti: ' + extrasText + '\nCena za ubytování: ' + money(stay.accommodation) +
         '\nÚklid: ' + money(stay.cleaning) + '\nMístní poplatek: ' + money(stay.localFee) +
         '\nCena celkem: ' + money(stay.total) + '\nE-mail hosta: ' + email + '\n\nZpráva:\n' + message +
-        '\n\nSchválení a další správa v administraci: ' + ADMIN_PAGE });
+        '\n\nSchválení a další správa v administraci: ' + getAdminPage_() });
     return { ok: true };
   } finally { lock.releaseLock(); }
 }
@@ -870,7 +919,7 @@ function lifecycleEmailBody_(ev, meta, stage) {
   if (stage === 'code') return { subject: 'Přístupový kód k apartmánu Costa Plana', body: greeting + 'váš online check-in je dokončen. Přístupový kód: ' + settings.accessCode + '\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   if (stage === 'checkin') return { subject: 'Online check-in před pobytem – Costa Plana',
     body: greeting + 'vaše rezervace je plně uhrazena. Vyplňte prosím online check-in před příjezdem:\n\n' +
-      meta.checkin.url + '\n\nPříjezd: ' + czDate(from) + '\nOdjezd: ' + czDate(to) +
+      webCheckinUrl_(meta.checkin.url) + '\n\nPříjezd: ' + czDate(from) + '\nOdjezd: ' + czDate(to) +
       '\n\nPo dokončení vám zašleme přístupový kód k apartmánu.\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   return null;
 }
@@ -917,7 +966,7 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
       meta.checkin.tokenHash = digestHex_(token);
       var checkout = ev.getEndTime(), expires = new Date(checkout.getTime() + 86400000);
       meta.checkin.expiresAt = expires.getTime();
-      meta.checkin.url = ScriptApp.getService().getUrl() + '?action=checkin&id=' +
+      meta.checkin.url = getCheckinPage_() + '?id=' +
         encodeURIComponent(ev.getId()) + '&token=' + encodeURIComponent(token);
     }
   }
@@ -1030,6 +1079,23 @@ function checkinPage_(id, token) {
   var tpl = HtmlService.createTemplateFromFile('checkin');
   tpl.reservationId = ev.getId(); tpl.token = String(token); tpl.adults = adults; tpl.children = children; tpl.guestCount = guestCount;
   return tpl.evaluate().setTitle('Online check-in – Costa Plana');
+}
+
+// Veřejná operace pro statickou check-in stránku: po ověření tokenu vrátí jen údaje nutné k sestavení formuláře.
+function checkinInfo_(id, token) {
+  var ev = null, meta = null;
+  try { ev = getCal().getEventById(String(id || '')); meta = ev && readReservationMeta_(ev); } catch (e) { return { ok: false, error: 'token' }; }
+  if (!ev || !meta || meta.status !== 'Čeká na online check-in' || !meta.checkin || meta.checkin.completedAt ||
+      !token || digestHex_(String(token)) !== meta.checkin.tokenHash || Number(meta.checkin.expiresAt) <= Date.now())
+    return { ok: false, error: 'token' };
+  var adults = Number(meta.adults), children = Number(meta.children), count = adults + children;
+  if (!isFinite(adults) || Math.floor(adults) !== adults || adults < 1 ||
+      !isFinite(children) || Math.floor(children) !== children || children < 0 || count < 1 || count > 4)
+    return { ok: false, error: 'guests' };
+  var tz = getCal().getTimeZone();
+  return { ok: true, adults: adults, children: children,
+    from: Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd'),
+    to: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd') };
 }
 
 function submitOnlineCheckin(id, token, guests) { return completeCheckin_(id, token, guests); }
