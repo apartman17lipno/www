@@ -53,9 +53,10 @@ document.getElementById('form').addEventListener('submit',function(event){
   var obj={};Array.prototype.forEach.call(section.querySelectorAll('input,select'),function(input){obj[input.name]=input.value;});return obj;
  });
  button.disabled=true;status.className='';status.textContent='Odesílám údaje…';
- fetch('<?= checkinUrl ?>',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json;charset=utf-8'},body:JSON.stringify({action:'checkin',id:CHECKIN.id,token:CHECKIN.token,guests:entries})}).then(function(r){return r.json();}).then(function(result){
- if(result&&result.ok){box.hidden=true;button.hidden=true;document.querySelector('h1').textContent='Online check-in byl dokončen';document.getElementById('hostCount').textContent='Online check-in byl dokončen.';status.className='success';status.textContent=result.warning?'E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Potvrzení s přístupovým kódem vám přijde e-mailem.';}
- else{button.disabled=false;status.className='error';status.textContent=result&&result.error==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';}
-}).catch(function(){button.disabled=false;status.className='error';status.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.'});
+ google.script.run.withSuccessHandler(function(result){
+  if(result&&result.ok){box.hidden=true;button.hidden=true;document.querySelector('h1').textContent='Online check-in byl dokončen';document.getElementById('hostCount').textContent='Online check-in byl dokončen.';status.className='success';status.textContent=result.warning?'E-mail s přístupovým kódem se nepodařilo odeslat; kontaktujte prosím ubytovatele.':'Potvrzení s přístupovým kódem vám přijde e-mailem.';}
+  else{button.disabled=false;status.className='error';status.textContent=result&&result.error==='settings'?'Ubytovatel zatím nenastavil přístupový kód. Zkuste to prosím později.':'Údaje se nepodařilo uložit. Zkontrolujte formulář a zkuste to znovu.';}
+ }).withFailureHandler(function(){button.disabled=false;status.className='error';status.textContent='Spojení se nepodařilo. Zkuste to prosím znovu.'})
+ .submitOnlineCheckin(CHECKIN.id,CHECKIN.token,entries);
 });
 </script></body></html>
