@@ -10,6 +10,7 @@ var OWNER = 'apartman17lipno@gmail.com';
 var PROD_CALENDAR_ID = 'apartman17lipno@gmail.com';
 var TEST_CALENDAR_ID = '0fb67dccf9787e1dc5ed00dee95e95304302de42e63d1e376b9a3be0cd48193e@group.calendar.google.com';
 var TEST_DEPLOYMENT_ID = 'AKfycbyZViBGlJQ0I8rDSNPGJMOhPOv0Go2KEEsoSoqvS6wH9HP4es48nBq288caje392S2fYA';
+var PROD_DEPLOYMENT_ID = 'AKfycbxqNQdGvT4scxO_k0uNsjusx61ivbBodvtGSQCqQwsHtzOn6fPTu6IHN-PEZ7Qisspr9A';
 var ADMINS = ['apartman17lipno@gmail.com', 'miloslav.filip@gmail.com', 'mona.viskova@gmail.com'];  // jen tyto účty smějí do administrace
 var NOTIFY = ['apartman17lipno@gmail.com'];                         // kdo dostává e-maily o nových poptávkách
 var ADMIN_PAGE = 'https://apartman17lipno.cz/admin.html';
@@ -224,6 +225,14 @@ function isTestEnvironment_() {
   try { url = ScriptApp.getService().getUrl() || ''; } catch (e) {}
   if (url.indexOf(TEST_DEPLOYMENT_ID) >= 0) return true;
   return PropertiesService.getScriptProperties().getProperty('ENV') === 'TEST';
+}
+
+// Adresa nasazené webové aplikace pro odkazy v e-mailech.
+// ScriptApp.getService().getUrl() se záměrně nepoužívá: při spuštění z triggeru
+// vrací vývojovou (/dev) adresu, kterou mohou otevřít jen vlastníci skriptu.
+function webAppUrl_() {
+  return 'https://script.google.com/macros/s/' +
+    (isTestEnvironment_() ? TEST_DEPLOYMENT_ID : PROD_DEPLOYMENT_ID) + '/exec';
 }
 
 function getAdminPage_() {
@@ -966,12 +975,16 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
       return { ok: false, error: 'state' };
     var now = Date.now();
     if (!meta.checkin) meta.checkin = { completedAt: null, guestData: null };
-    if (!meta.checkin.tokenHash || !meta.checkin.expiresAt || Number(meta.checkin.expiresAt) <= now) {
+    var checkinBase = webAppUrl_() + '?action=checkin&';
+    // Starší rezervace mohou mít uloženou /dev adresu z triggeru; takový odkaz
+    // hostovi nefunguje, proto se token i adresa při dalším odeslání obnoví.
+    if (!meta.checkin.tokenHash || !meta.checkin.expiresAt || Number(meta.checkin.expiresAt) <= now ||
+        String(meta.checkin.url || '').indexOf(checkinBase) !== 0) {
       var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
       meta.checkin.tokenHash = digestHex_(token);
       var checkout = ev.getEndTime(), expires = new Date(checkout.getTime() + 86400000);
       meta.checkin.expiresAt = expires.getTime();
-      meta.checkin.url = ScriptApp.getService().getUrl() + '?action=checkin&id=' +
+      meta.checkin.url = checkinBase + 'id=' +
         encodeURIComponent(ev.getId()) + '&token=' + encodeURIComponent(token);
     }
   }

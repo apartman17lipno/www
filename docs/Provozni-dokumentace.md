@@ -60,6 +60,7 @@ TEST a PROD používají stejný kód. Liší se výběrem backendu, kalendáře
 - **Frontend** (`assets/booking.js`, `admin.html`): obsahuje obě adresy backendu (`PROD_ENDPOINT`/`TEST_ENDPOINT`, resp. `PROD_EP`/`TEST_EP`). Ostrý backend se použije jen na hostech `apartman17lipno.cz` a `www.apartman17lipno.cz`; na všech ostatních adresách (včetně `github.io` a `localhost`) se použije testovací. Při změně adresy nasazení ji upravte v obou souborech.
 - **Backend** (`Code.gs`): funkce `isTestEnvironment_()` pozná TEST podle adresy nasazení (`TEST_DEPLOYMENT_ID`) nebo podle vlastnosti `ENV=TEST` ve Script Properties. TEST používá kalendář `TEST_CALENDAR_ID`, PROD kalendář `PROD_CALENDAR_ID`. Funkce `getCal()` má pojistku: při pokusu TESTu o přístup k produkčnímu kalendáři skončí chybou.
 - Prostředí lze v editoru Apps Scriptu nastavit spuštěním funkce `setEnvironmentTest()` nebo `setEnvironmentProd()`. V testovacím projektu musí být nastaveno `ENV=TEST`.
+- Odkazy na online check-in v e-mailech se sestavují z ID nasazení (`TEST_DEPLOYMENT_ID`/`PROD_DEPLOYMENT_ID`), nikoli přes `ScriptApp.getService().getUrl()`. To při běhu z triggeru vrací vývojovou adresu `/dev`, kterou může otevřít jen vlastník skriptu.
 - Odkaz na administraci v e-mailech o nových poptávkách se bere z `getAdminPage_()`, takže v TESTu vede na testovací administraci.
 
 ### Omezení a rizika TESTu
