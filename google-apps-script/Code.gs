@@ -14,6 +14,8 @@ var ADMINS = ['apartman17lipno@gmail.com', 'miloslav.filip@gmail.com', 'mona.vis
 var NOTIFY = ['apartman17lipno@gmail.com'];                         // kdo dostává e-maily o nových poptávkách
 var ADMIN_PAGE = 'https://apartman17lipno.cz/admin.html';
 var TEST_ADMIN_PAGE = 'https://apartman17lipno.github.io/www-test/admin.html';
+var CHECKIN_PAGE = 'https://apartman17lipno.cz/checkin.html';   // statická check-in stránka na webu (PROD)
+var TEST_CHECKIN_PAGE = 'https://apartman17lipno.github.io/www-test/checkin.html';   // totéž pro TEST
 var GOOGLE_CLIENT_ID = '478585801571-svdcuhvao5ft4dpsblvkf36jg2751uqj.apps.googleusercontent.com';  // OAuth Client ID (není tajný)
 var SESSION_TTL_MS = 12 * 3600 * 1000;   // platnost relace: 12 hodin
 var MAX_SESSIONS = 25;                   // nejvýš tolik současných relací
@@ -62,6 +64,7 @@ function doPost(e) {
       case 'submit': result = handleSubmit(d.data || d); break;
       case 'login':  result = login_(d.credential); break;
       case 'logout': result = logout_(d.s); break;
+      case 'checkininfo': result = checkinInfo_(d.id, d.token); break;
       case 'checkin': result = completeCheckin_(d.id, d.token, d.guests); break;
       case 'admin':  result = adminCall_(d); break;
       default:       result = { ok: false, error: 'action' };
@@ -228,6 +231,19 @@ function isTestEnvironment_() {
 
 function getAdminPage_() {
   return isTestEnvironment_() ? TEST_ADMIN_PAGE : (PropertiesService.getScriptProperties().getProperty('ADMIN_PAGE') || ADMIN_PAGE);
+}
+
+function getCheckinPage_() {
+  return isTestEnvironment_() ? TEST_CHECKIN_PAGE : CHECKIN_PAGE;
+}
+// Odkaz na check-in vede na statickou stránku webu (ne na script.google.com, kde přihlášený
+// uživatel s více Google účty dostává 404). Starší uložené odkazy se převedou na nový tvar;
+// id i token se přebírají beze změny, takže už vydané tokeny zůstávají platné.
+function webCheckinUrl_(storedUrl) {
+  var url = String(storedUrl || ''), base = getCheckinPage_();
+  if (url.indexOf(base + '?') === 0) return url;
+  var id = /[?&]id=([^&]+)/.exec(url), token = /[?&]token=([^&]+)/.exec(url);
+  return id && token ? base + '?id=' + id[1] + '&token=' + token[1] : url;
 }
 
 function getCal() {
@@ -903,7 +919,7 @@ function lifecycleEmailBody_(ev, meta, stage) {
   if (stage === 'code') return { subject: 'Přístupový kód k apartmánu Costa Plana', body: greeting + 'váš online check-in je dokončen. Přístupový kód: ' + settings.accessCode + '\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   if (stage === 'checkin') return { subject: 'Online check-in před pobytem – Costa Plana',
     body: greeting + 'vaše rezervace je plně uhrazena. Vyplňte prosím online check-in před příjezdem:\n\n' +
-      meta.checkin.url + '\n\nPříjezd: ' + czDate(from) + '\nOdjezd: ' + czDate(to) +
+      webCheckinUrl_(meta.checkin.url) + '\n\nPříjezd: ' + czDate(from) + '\nOdjezd: ' + czDate(to) +
       '\n\nPo dokončení vám zašleme přístupový kód k apartmánu.\n\nS pozdravem\nApartmán 17 - Costa Plana' };
   return null;
 }
@@ -920,33 +936,12 @@ function createPaymentQr_(account, amount, variableSymbol) {
     }
     if (prefix === '0') prefix = '';
     if (number === '0' || !number || !bank || !isFinite(amount) || Number(amount) <= 0) return null;
-    var vs = String(variableSymbol || '').replace(/\D/g, '').slice(0, 10);
-    var params = {
-      accountNumber: number,
-      bankCode: bank,
-      amount: Number(amount).toFixed(2),
-      currency: 'CZK',
-      message: vs ? ('Rezervace ' + vs) : 'Rezervace',
-      size: '220'
-    };
-    if (prefix) params.accountPrefix = prefix;
-    if (vs) params.vs = vs;
+    var params = { accountPrefix: prefix, accountNumber: number, bankCode: bank, amount: Number(amount).toFixed(2), currency: 'CZK', vs: String(variableSymbol || '').replace(/\D/g, '').slice(0, 10), message: 'Rezervace ' + String(variableSymbol || ''), size: '220' };
     var query = Object.keys(params).map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&');
     var response = UrlFetchApp.fetch('https://api.paylibo.com/paylibo/generator/czech/image?' + query, { muteHttpExceptions: true });
-    var headers = response.getHeaders() || {};
-    var contentType = '';
-    Object.keys(headers).forEach(function(k) {
-      if (String(k).toLowerCase() === 'content-type') contentType = String(headers[k] || '');
-    });
-    if (response.getResponseCode() !== 200 || !/^image\/png/i.test(contentType)) {
-      console.warn('QR platba nebyla vygenerována:', response.getResponseCode(), contentType);
-      return null;
-    }
+    if (response.getResponseCode() !== 200 || !/^image\/png/i.test(response.getHeaders()['Content-Type'] || '')) return null;
     return response.getBlob().setName('qr-platba.png');
-  } catch (err) {
-    console.warn('Chyba při generování QR platby:', err);
-    return null;
-  }
+  } catch (err) { return null; }
 }
 
 function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
@@ -971,7 +966,7 @@ function sendLifecycleEmail_(ev, meta, stage, manual, actor) {
       meta.checkin.tokenHash = digestHex_(token);
       var checkout = ev.getEndTime(), expires = new Date(checkout.getTime() + 86400000);
       meta.checkin.expiresAt = expires.getTime();
-      meta.checkin.url = ScriptApp.getService().getUrl() + '?action=checkin&id=' +
+      meta.checkin.url = getCheckinPage_() + '?id=' +
         encodeURIComponent(ev.getId()) + '&token=' + encodeURIComponent(token);
     }
   }
@@ -1083,8 +1078,24 @@ function checkinPage_(id, token) {
     return infoPage('Chybné údaje rezervace', 'Počet hostů v rezervaci nelze ověřit. Kontaktujte nás prosím e-mailem.', 'mailto:' + OWNER, 'Napsat e-mail');
   var tpl = HtmlService.createTemplateFromFile('checkin');
   tpl.reservationId = ev.getId(); tpl.token = String(token); tpl.adults = adults; tpl.children = children; tpl.guestCount = guestCount;
-  tpl.checkinUrl = ScriptApp.getService().getUrl();
   return tpl.evaluate().setTitle('Online check-in – Costa Plana');
+}
+
+// Veřejná operace pro statickou check-in stránku: po ověření tokenu vrátí jen údaje nutné k sestavení formuláře.
+function checkinInfo_(id, token) {
+  var ev = null, meta = null;
+  try { ev = getCal().getEventById(String(id || '')); meta = ev && readReservationMeta_(ev); } catch (e) { return { ok: false, error: 'token' }; }
+  if (!ev || !meta || meta.status !== 'Čeká na online check-in' || !meta.checkin || meta.checkin.completedAt ||
+      !token || digestHex_(String(token)) !== meta.checkin.tokenHash || Number(meta.checkin.expiresAt) <= Date.now())
+    return { ok: false, error: 'token' };
+  var adults = Number(meta.adults), children = Number(meta.children), count = adults + children;
+  if (!isFinite(adults) || Math.floor(adults) !== adults || adults < 1 ||
+      !isFinite(children) || Math.floor(children) !== children || children < 0 || count < 1 || count > 4)
+    return { ok: false, error: 'guests' };
+  var tz = getCal().getTimeZone();
+  return { ok: true, adults: adults, children: children,
+    from: Utilities.formatDate(ev.getStartTime(), tz, 'yyyy-MM-dd'),
+    to: Utilities.formatDate(ev.getEndTime(), tz, 'yyyy-MM-dd') };
 }
 
 function submitOnlineCheckin(id, token, guests) { return completeCheckin_(id, token, guests); }
