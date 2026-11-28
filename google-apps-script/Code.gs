@@ -1083,6 +1083,7 @@ function checkinPage_(id, token) {
     return infoPage('Chybné údaje rezervace', 'Počet hostů v rezervaci nelze ověřit. Kontaktujte nás prosím e-mailem.', 'mailto:' + OWNER, 'Napsat e-mail');
   var tpl = HtmlService.createTemplateFromFile('checkin');
   tpl.reservationId = ev.getId(); tpl.token = String(token); tpl.adults = adults; tpl.children = children; tpl.guestCount = guestCount;
+  tpl.checkinUrl = ScriptApp.getService().getUrl();
   return tpl.evaluate().setTitle('Online check-in – Costa Plana');
 }
 
